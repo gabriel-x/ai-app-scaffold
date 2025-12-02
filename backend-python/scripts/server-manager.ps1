@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Gabriel Xia(加百列)
+Param([string]$cmd = "help")
+$root = (Resolve-Path "$PSScriptRoot/..").Path
+$logDir = "$root/logs"
+$pidFile = "$logDir/backend.pid"
+$portFile = "$root/.python.port"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+function Load-Env {
+  if (Test-Path "$root/.env") { Get-Content "$root/.env" | ForEach-Object { if (-not $_.StartsWith('#') -and $_.Contains('=')) { $k,$v = $_.Split('='); Set-Item -Path Env:$k -Value $v } } }
+  if (Test-Path "$root/.env.local") { Get-Content "$root/.env.local" | ForEach-Object { if (-not $_.StartsWith('#') -and $_.Contains('=')) { $k,$v = $_.Split('='); Set-Item -Path Env:$k -Value $v } } }
+}
+function Ensure-Port {
+  if (Test-Path $portFile) { $port = Get-Content $portFile } else { $port = $null }
+  if (-not $port) { $range = $Env:BACKEND_PORT_RANGE; if (-not $range) { $range = '10000-10090' }; $s,$e = $range.Split('-'); for ($p=[int]$s; $p -le [int]$e; $p++) { $inuse = (netstat -ano | Select-String ":$p "); if (-not $inuse) { $port = $p; break } } }
+  if (-not $port) { $port = 10000 }
+  Set-Content -Path $portFile -Value $port
+  $Env:PORT = "$port"
+}
+function Start-Server {
+  Load-Env
+  Ensure-Port
+  $p = Start-Process -FilePath uvicorn -ArgumentList "app.main:app","--host","0.0.0.0","--port","$Env:PORT" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.log"
+  Set-Content -Path $pidFile -Value $p.Id
+  Write-Host "python backend started on http://localhost:$Env:PORT"
+}
+function Stop-Server { if (Test-Path $pidFile) { $pid = Get-Content $pidFile; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force } }
+function Status-Server { if (Test-Path $pidFile) { $pid = Get-Content $pidFile; try { Get-Process -Id $pid | Out-Null; Write-Host "running(pid:$pid)" } catch { Write-Host "stopped" } } else { Write-Host "stopped" } }
+function Logs { Get-Content "$logDir/backend.log" -Wait -Tail 200 }
+function Health { if (Test-Path $portFile) { $p = Get-Content $portFile; try { Invoke-WebRequest -Uri "http://localhost:$p/health" -UseBasicParsing | Out-Null; Write-Host "200" } catch { Write-Host "error" } } else { Write-Host "no-port" } }
+switch ($cmd) {
+  'start' { Start-Server }
+  'stop' { Stop-Server }
+  'restart' { Stop-Server; Start-Server }
+  'status' { Status-Server }
+  'logs' { Logs }
+  'health' { Health }
+  default { Write-Host "usage: server-manager.ps1 [start|stop|restart|status|logs|health]" }
+}

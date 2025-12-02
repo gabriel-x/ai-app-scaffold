@@ -1,0 +1,45 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2025 Gabriel Xia(加百列) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+
+:root[data-theme="blue"] { --bg: theme(colors.blue.bgLight); --surface: theme(colors.blue.surfaceLight); --border: theme(colors.blue.borderLight); --text: theme(colors.blue.textLight); --accent: theme(colors.blue.accentLight); --hero-bg: theme(colors.blue.heroLight); --bubble-bg: theme(colors.blue.bubbleBgLight); --bubble-border: theme(colors.blue.bubbleBorderLight); --bubble-text: theme(colors.blue.bubbleTextLight); }
+:root.dark[data-theme="blue"] { --bg: theme(colors.blue.bgDark); --surface: theme(colors.blue.surfaceDark); --border: theme(colors.blue.borderDark); --text: theme(colors.blue.textDark); --accent: theme(colors.blue.accentDark); --hero-bg: theme(colors.blue.heroDark); --bubble-bg: theme(colors.blue.bubbleBgDark); --bubble-border: theme(colors.blue.bubbleBorderDark); --bubble-text: theme(colors.blue.bubbleTextDark); }
+:root[data-theme="purple"] { --bg: theme(colors.purple.bgLight); --surface: theme(colors.purple.surfaceLight); --border: theme(colors.purple.borderLight); --text: theme(colors.purple.textLight); --accent: theme(colors.purple.accentLight); --hero-bg: theme(colors.purple.heroLight); --bubble-bg: theme(colors.purple.bubbleBgLight); --bubble-border: theme(colors.purple.bubbleBorderLight); --bubble-text: theme(colors.purple.bubbleTextLight); }
+:root.dark[data-theme="purple"] { --bg: theme(colors.purple.bgDark); --surface: theme(colors.purple.surfaceDark); --border: theme(colors.purple.borderDark); --text: theme(colors.purple.textDark); --accent: theme(colors.purple.accentDark); --hero-bg: theme(colors.purple.heroDark); --bubble-bg: theme(colors.purple.bubbleBgDark); --bubble-border: theme(colors.purple.bubbleBorderDark); --bubble-text: theme(colors.purple.bubbleTextDark); }
+
+.theme-bg { background-color: var(--bg); }
+.theme-surface { background-color: var(--surface); }
+.theme-border { border-color: var(--border); }
+.theme-text { color: var(--text); }
+.theme-accent { color: var(--accent); }
+.theme-btn { background-color: var(--accent); color: #fff; }
+
+.card { background-color: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 12px 28px rgba(0,0,0,0.35); }
+.hero { background: radial-gradient(110% 120% at 50% 10%, color-mix(in oklab, var(--accent) 30%, transparent) 0%, transparent 60%), var(--hero-bg); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+.btn-accent { background-image: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 60%, #1f2937)); color: #fff; }
+.bubble { background-color: var(--bubble-bg); border: 1px solid var(--bubble-border); color: var(--bubble-text); border-radius: 9999px; padding: 0.125rem 0.5rem; font-size: 12px; }
+
+.nav { backdrop-filter: saturate(140%) blur(8px); background-color: rgba(0,0,0,0.25); border-bottom: 1px solid var(--border); }
+.tab { padding: 0.5rem 0.75rem; border-radius: 0.5rem; color: var(--text); opacity: 0.8; }
+.tab-active { opacity: 1; color: var(--text); border: 1px solid var(--accent); }
+.brand { font-weight: 600; color: #93C5FD; }
+.input { background-color: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 0.5rem; }
+.shadow-card { box-shadow: 0 10px 30px rgba(15,23,42,0.55); }
+.select { appearance: none; background-color: var(--surface); border: 1px solid var(--border); color: color-mix(in oklab, var(--text) 80%, transparent); border-radius: 12px; padding: 6px 28px 6px 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'><path fill='%239CA3AF' d='M831.872 340.864 512 652.672 192.128 340.864a30.59 30.59 0 0 0-42.752 0 29.12 29.12 0 0 0 0 41.6L489.664 714.24a32 32 0 0 0 44.672 0l340.288-331.712a29.12 29.12 0 0 0 0-41.728 30.59 30.59 0 0 0-42.752 0z'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px; }
+.select:hover { border-color: var(--accent); }
+.select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent); }
+.select--small { font-size: 12px; }
+
+/* 开关样式（浅色/深色） */
+.mode-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.mode-switch__input { position: absolute; width: 0; height: 0; opacity: 0; }
+.mode-switch__label { font-size: 12px; color: var(--text); opacity: 0.7; }
+.mode-switch__label.is-active { opacity: 1; color: var(--accent); }
+.mode-switch__core { width: 44px; height: 24px; border-radius: 9999px; background-color: var(--surface); border: 1px solid var(--border); position: relative; transition: all 0.2s ease; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent); }
+.mode-switch__action { width: 18px; height: 18px; border-radius: 9999px; background-color: var(--accent); position: absolute; top: 3px; left: 3px; transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+.mode-switch.is-checked .mode-switch__core { background-color: color-mix(in oklab, var(--accent) 18%, var(--surface)); border-color: var(--accent); }
+.mode-switch.is-checked .mode-switch__action { left: 23px; }
