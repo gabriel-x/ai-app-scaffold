@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Gabriel Xia(加百列)
+# Root
+.DS_Store
+Thumbs.db
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Trae
+# keep .trae for project documents
+
+# Logs
+frontend/logs/
+backend/logs/
+backend-node/logs/
+backend-python/logs/
+
+# Node.js
+# apply to any depth
+node_modules/
+dist/
+build/
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend (Vite/Playwright)
+frontend/.vite/
+playwright-report/
+test-results/
+
+# Python
+backend-python/.venv/
+backend-python/venv/
+backend-python/__pycache__/
+backend-python/.pytest_cache/
+backend-python/.mypy_cache/
+backend-python/.tox/
+backend-python/.cache/
+backend-python/build/
+backend-python/dist/
+backend-python/*.pyc
+backend-python/*.pyo
+backend-python/.ropeproject/
+backend-python/.python-version
+
+# Docker
+**/.env.local
+**/.env.development.local
+**/.env.production.local
+**/.env
