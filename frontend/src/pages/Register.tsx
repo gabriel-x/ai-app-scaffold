@@ -13,6 +13,10 @@ export default function Register() {
   const { register } = useAuth()
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!email || !password || password.length < 8) {
+      toast.error('请输入有效邮箱，密码至少8位')
+      return
+    }
     const ok = await register(email, password, name)
     if (ok) {
       toast.success('注册成功')
@@ -34,4 +38,3 @@ export default function Register() {
     </div>
   )
 }
-

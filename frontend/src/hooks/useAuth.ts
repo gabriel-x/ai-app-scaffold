@@ -15,6 +15,7 @@ type Store = {
   register: (email: string, password: string, name?: string) => Promise<boolean>
   logout: () => void
   isAuthenticated: () => boolean
+  updateProfile: (name: string) => Promise<boolean>
 }
 
 const useStore = create<Store>((set, get) => ({
@@ -58,10 +59,22 @@ const useStore = create<Store>((set, get) => ({
   isAuthenticated: () => {
     const a = get().accessToken || localStorage.getItem('accessToken')
     return !!a
+  },
+  updateProfile: async (name: string) => {
+    try {
+      const token = get().accessToken || localStorage.getItem('accessToken') || undefined
+      await api.patch('/accounts/profile', { name }, token)
+      const me = await api.get('/auth/me', token)
+      const a = token
+      const r = get().refreshToken || localStorage.getItem('refreshToken') || undefined
+      get().setSession(me, a, r)
+      return true
+    } catch {
+      return false
+    }
   }
 }))
 
 export function useAuth() {
   return useStore()
 }
-
