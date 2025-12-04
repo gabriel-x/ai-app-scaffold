@@ -11,6 +11,64 @@
 - 前端：`frontend/scripts/client-manager.sh start:dev` → `http://localhost:10100`
 - 前端配置：在 `frontend/.env` 设置 `VITE_API_BASE_URL=http://localhost:10000`
 
+## 发布与一键启动（v1.0.0）
+
+### Linux 发布包制作
+- 运行 `./scripts/package-release.sh`
+  - 输出：`dist/releases/scaffold-v1.0.0.tar.gz`
+  - 内容：`frontend/`、`backend-node/`、`scripts/install.sh|release.sh|pretty.sh`、`README.md`、`VERSION`、`.env.example`
+
+### Linux 下载与解压
+- 将 `scaffold-v1.0.0.tar.gz` 下载到目标目录
+- 解压：`tar -xzf scaffold-v1.0.0.tar.gz`
+
+### Linux 一键安装与启动
+- 一键安装：在包根目录运行 `./scripts/install.sh`（检查环境、安装依赖、创建日志与默认 `.env`）
+- 一键启动（生产预览）：`./scripts/release.sh start`
+  - 后端端口范围 `10000-10090`（健康检查 `GET /health`）
+  - 前端端口范围 `10100-10190`（`vite preview`）
+- 健康与日志：`./scripts/release.sh health`；`./scripts/release.sh logs`
+- 停止与状态：`./scripts/release.sh stop`；`./scripts/release.sh status`
+
+### Linux 安装脚本说明
+- `scripts/install.sh`
+  - 依赖：`node>=18`、`npm>=10`、`lsof`、`curl`
+  - 生成示例 `.env`
+    - `frontend/.env`：`VITE_API_BASE_URL=http://localhost:10000`
+    - `backend-node/.env`：`BASE_PATH=/api/v1`、`ALLOWED_ORIGINS=*`、`JWT_SECRET=<随机>`
+
+### Windows 发布包制作
+- 推荐：在 Bash 中运行 `./scripts/package-release-win.sh`
+  - 输出：`dist/releases/scaffold-windows-v1.0.0.zip`
+  - 内容：`frontend/`、`backend-node/`、`scripts/install.ps1|release.ps1|pretty.ps1`、`README.md`、`VERSION`、`.env.example`
+- 备选：在 PowerShell 中运行 `pwsh -NoProfile -File scripts/package-release-win.ps1`
+  - 两者底层统一使用 `scripts/package-release-win.js` 实现，确保打包逻辑一致
+
+### Windows 下载与解压
+- 将 `scaffold-windows-v1.0.0.zip` 下载到目标目录
+- 解压（PowerShell）：`Expand-Archive -Path .\scaffold-windows-v1.0.0.zip -DestinationPath .\scaffold-windows-v1.0.0`
+
+### Windows 一键安装与启动
+- 一键安装：在包根目录运行 `.\scripts\install.ps1`（检查环境、安装依赖、创建日志与默认 `.env`）
+- 一键启动（生产预览）：`.\scripts\release.ps1 start`
+  - 后端端口范围 `10000-10090`（健康检查 `GET /health`）
+  - 前端端口范围 `10100-10190`（`vite preview`）
+- 健康与日志：`.\scripts\release.ps1 health`；`.\scripts\release.ps1 logs`
+- 停止与状态：`.\scripts\release.ps1 stop`；`.\scripts\release.ps1 status`
+
+### Windows 安装脚本说明
+- `scripts/install.ps1`
+  - 依赖：`node>=18`、`npm`
+  - 生成示例 `.env`
+    - `frontend/.env`：`VITE_API_BASE_URL=http://localhost:10000`
+    - `backend-node/.env`：`BASE_PATH=/api/v1`、`ALLOWED_ORIGINS=*`、`JWT_SECRET=<随机>`
+
+### 开发模式（可选）
+- 前端：`frontend/scripts/client-manager.sh start:dev`
+- 后端：`backend-node/scripts/server-manager.sh start:dev`
+
+> 提示：端口文件位于各模块根目录（`.frontend.port`/`.node.port`），日志在 `frontend/logs/` 与 `backend-node/logs/`。
+
 ## 功能演示
 
 - 注册：页面 `/register` 调用 `POST /api/v1/auth/register`

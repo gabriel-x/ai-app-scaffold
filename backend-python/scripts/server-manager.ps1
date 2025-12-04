@@ -20,7 +20,7 @@ function Ensure-Port {
 function Start-Server {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath uvicorn -ArgumentList "app.main:app","--host","0.0.0.0","--port","$Env:PORT" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.log"
+  $p = Start-Process -FilePath uvicorn -ArgumentList "app.main:app","--host","0.0.0.0","--port","$Env:PORT" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log"
   Set-Content -Path $pidFile -Value $p.Id
   Write-Host "python backend started on http://localhost:$Env:PORT"
 }

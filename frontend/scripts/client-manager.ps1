@@ -17,27 +17,36 @@ function Ensure-Port {
   Set-Content -Path $portFile -Value $port
   $Env:PORT = "$port"
 }
-function Start-Frontend {
+function Start-Dev {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath npm -ArgumentList "run","dev","--","--port","$Env:PORT","--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.log"
+  $p = Start-Process -FilePath npm -ArgumentList "run","dev","--","--port","$Env:PORT","--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -NoNewWindow -WindowStyle Hidden
   Set-Content -Path $pidFile -Value $p.Id
-  Write-Host "frontend started on http://localhost:$Env:PORT"
+  Write-Host "frontend dev started on http://localhost:$Env:PORT"
+}
+function Start-Preview {
+  Load-Env
+  Ensure-Port
+  $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -NoNewWindow -WindowStyle Hidden
+  if ($build) { $build.WaitForExit() } else { Write-Error "frontend build start failed"; return }
+  $p = Start-Process -FilePath npm -ArgumentList "run","preview","--","--port","$Env:PORT","--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -NoNewWindow -WindowStyle Hidden
+  if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "frontend preview started on http://localhost:$Env:PORT" } else { Write-Error "frontend preview start failed" }
 }
 function Stop-Frontend {
-  if (Test-Path $pidFile) { $pid = Get-Content $pidFile; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force }
+  if (Test-Path $pidFile) { $childPid = Get-Content $pidFile; Stop-Process -Id $childPid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force }
 }
 function Status-Frontend {
-  if (Test-Path $pidFile) { $pid = Get-Content $pidFile; try { Get-Process -Id $pid | Out-Null; Write-Host "running(pid:$pid)" } catch { Write-Host "stopped" } } else { Write-Host "stopped" }
+  if (Test-Path $pidFile) { $childPid = Get-Content $pidFile; try { Get-Process -Id $childPid | Out-Null; Write-Host "running(pid:$childPid)" } catch { Write-Host "stopped" } } else { Write-Host "stopped" }
 }
 function Logs { Get-Content "$logDir/frontend.log" -Wait -Tail 200 }
 function Health { if (Test-Path $portFile) { $p = Get-Content $portFile; try { Invoke-WebRequest -Uri "http://localhost:$p" -UseBasicParsing | Out-Null; Write-Host "200" } catch { Write-Host "error" } } else { Write-Host "no-port" } }
 switch ($cmd) {
-  'start' { Start-Frontend }
+  'start' { Start-Preview }
+  'start:dev' { Start-Dev }
   'stop' { Stop-Frontend }
-  'restart' { Stop-Frontend; Start-Frontend }
+  'restart' { Stop-Frontend; Start-Preview }
   'status' { Status-Frontend }
   'logs' { Logs }
   'health' { Health }
-  default { Write-Host "usage: client-manager.ps1 [start|stop|restart|status|logs|health]" }
+  default { Write-Host "usage: client-manager.ps1 [start|start:dev|stop|restart|status|logs|health]" }
 }

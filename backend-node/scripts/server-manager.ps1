@@ -17,23 +17,31 @@ function Ensure-Port {
   Set-Content -Path $portFile -Value $port
   $Env:PORT = "$port"
 }
-function Start-Server {
+function Start-Prod {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.log"
-  Set-Content -Path $pidFile -Value $p.Id
-  Write-Host "node backend started on http://localhost:$Env:PORT"
+  $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -NoNewWindow -WindowStyle Hidden
+  if ($build) { $build.WaitForExit() } else { Write-Error "backend build start failed"; return }
+  $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -NoNewWindow -WindowStyle Hidden
+  if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "started on http://localhost:$Env:PORT" } else { Write-Error "backend start failed" }
 }
-function Stop-Server { if (Test-Path $pidFile) { $pid = Get-Content $pidFile; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force } }
-function Status-Server { if (Test-Path $pidFile) { $pid = Get-Content $pidFile; try { Get-Process -Id $pid | Out-Null; Write-Host "running(pid:$pid)" } catch { Write-Host "stopped" } } else { Write-Host "stopped" } }
+function Start-Dev {
+  Load-Env
+  Ensure-Port
+  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -NoNewWindow -WindowStyle Hidden
+  if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "dev started on http://localhost:$Env:PORT" } else { Write-Error "backend dev start failed" }
+}
+function Stop-Server { if (Test-Path $pidFile) { $childPid = Get-Content $pidFile; Stop-Process -Id $childPid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force } }
+function Status-Server { if (Test-Path $pidFile) { $childPid = Get-Content $pidFile; try { Get-Process -Id $childPid | Out-Null; Write-Host "running(pid:$childPid)" } catch { Write-Host "stopped" } } else { Write-Host "stopped" } }
 function Logs { Get-Content "$logDir/backend.log" -Wait -Tail 200 }
 function Health { if (Test-Path $portFile) { $p = Get-Content $portFile; try { Invoke-WebRequest -Uri "http://localhost:$p/health" -UseBasicParsing | Out-Null; Write-Host "200" } catch { Write-Host "error" } } else { Write-Host "no-port" } }
 switch ($cmd) {
-  'start' { Start-Server }
+  'start' { Start-Prod }
+  'start:dev' { Start-Dev }
   'stop' { Stop-Server }
-  'restart' { Stop-Server; Start-Server }
+  'restart' { Stop-Server; Start-Prod }
   'status' { Status-Server }
   'logs' { Logs }
   'health' { Health }
-  default { Write-Host "usage: server-manager.ps1 [start|stop|restart|status|logs|health]" }
+  default { Write-Host "usage: server-manager.ps1 [start|start:dev|stop|restart|status|logs|health]" }
 }
