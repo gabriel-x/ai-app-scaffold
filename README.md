@@ -79,3 +79,9 @@
 
 - 位置：`docs-framework/specs/api/api.yaml`
 - 接口：`/auth/register|login|refresh|me`，`/accounts/profile (GET|PATCH)`，`/health`
+## License & Notice
+
+- 主许可证：`LICENSE`（MIT）。
+- 版权主体：Gabriel Xia(加百列)。
+- 源码文件采用 SPDX 头部标识（`SPDX-License-Identifier: MIT`）与版权声明统一管理。
+- 版权声明文件：`NOTICE`；第三方组件许可证信息见各模块包管理清单。
