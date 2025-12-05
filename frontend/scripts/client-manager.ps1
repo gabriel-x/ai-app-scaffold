@@ -28,7 +28,13 @@ function Start-Preview {
   Load-Env
   Ensure-Port
   $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -WindowStyle Hidden
-  if ($build) { $build.WaitForExit() } else { Write-Error "frontend build start failed"; return }
+  if ($build) {
+    $build.WaitForExit()
+    if ($build.ExitCode -ne 0) {
+      Write-Error "frontend build failed with exit code $($build.ExitCode). Check $logDir/build.err.log"
+      return
+    }
+  } else { Write-Error "frontend build start failed"; return }
   $p = Start-Process -FilePath npm -ArgumentList "run","preview","--","--port","$Env:PORT","--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -WindowStyle Hidden
   if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "frontend preview started on http://localhost:$Env:PORT" } else { Write-Error "frontend preview start failed" }
 }

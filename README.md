@@ -63,6 +63,12 @@
     - `frontend/.env`：`VITE_API_BASE_URL=http://localhost:10000`
     - `backend-node/.env`：`BASE_PATH=/api/v1`、`ALLOWED_ORIGINS=*`、`JWT_SECRET=<随机>`
 
+### Windows 常见问题与自助排查
+- **端口文件解析错误**：若启动失败且日志无明显错误，请检查 `.node.port` 或 `.frontend.port` 文件内容是否包含非数字字符（如 BOM 头或空白行）。现有脚本已增加过滤逻辑，但手动修改时需注意。
+- **服务启动参数冲突**：`Start-Process` 在 Windows 上同时使用 `-NoNewWindow` 和 `-WindowStyle Hidden` 会导致错误。请确保使用最新版 `server-manager.ps1`，已移除冲突参数。
+- **API 契约验证**：如需验证后端接口是否符合预期，可运行 `powershell -NoProfile -ExecutionPolicy Bypass -File backend-node/scripts/test-api.ps1`。该脚本会执行完整的注册、登录、刷新令牌及个人信息更新流程，并生成 JSON 报告。
+
+
 ### 开发模式（可选）
 - 前端：`frontend/scripts/client-manager.sh start:dev`
 - 后端：`backend-node/scripts/server-manager.sh start:dev`

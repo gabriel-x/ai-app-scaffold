@@ -21,7 +21,13 @@ function Start-Prod {
   Load-Env
   Ensure-Port
   $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -WindowStyle Hidden
-  if ($build) { $build.WaitForExit() } else { Write-Error "backend build start failed"; return }
+  if ($build) {
+    $build.WaitForExit()
+    if ($build.ExitCode -ne 0) {
+      Write-Error "backend build failed with exit code $($build.ExitCode). Check $logDir/build.err.log"
+      return
+    }
+  } else { Write-Error "backend build start failed"; return }
   $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -WindowStyle Hidden
   if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "started on http://localhost:$Env:PORT" } else { Write-Error "backend start failed" }
 }
