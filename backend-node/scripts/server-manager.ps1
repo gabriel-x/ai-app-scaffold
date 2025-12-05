@@ -11,7 +11,7 @@ function Load-Env {
   if (Test-Path "$root/.env.local") { Get-Content "$root/.env.local" | ForEach-Object { if (-not $_.StartsWith('#') -and $_.Contains('=')) { $k,$v = $_.Split('='); Set-Item -Path Env:$k -Value $v } } }
 }
 function Ensure-Port {
-  if (Test-Path $portFile) { $port = Get-Content $portFile } else { $port = $null }
+  if (Test-Path $portFile) { $port = (Get-Content $portFile | Where-Object { $_ -match '^[0-9]+$' } | Select-Object -First 1) } else { $port = $null }
   if (-not $port) { $range = $Env:BACKEND_PORT_RANGE; if (-not $range) { $range = '10000-10090' }; $s,$e = $range.Split('-'); for ($p=[int]$s; $p -le [int]$e; $p++) { $inuse = (netstat -ano | Select-String ":$p "); if (-not $inuse) { $port = $p; break } } }
   if (-not $port) { $port = 10000 }
   Set-Content -Path $portFile -Value $port
@@ -20,15 +20,15 @@ function Ensure-Port {
 function Start-Prod {
   Load-Env
   Ensure-Port
-  $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -NoNewWindow -WindowStyle Hidden
+  $build = Start-Process -FilePath npm -ArgumentList "run","build" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/build.log" -RedirectStandardError "$logDir/build.err.log" -WindowStyle Hidden
   if ($build) { $build.WaitForExit() } else { Write-Error "backend build start failed"; return }
-  $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -NoNewWindow -WindowStyle Hidden
+  $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -WindowStyle Hidden
   if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "started on http://localhost:$Env:PORT" } else { Write-Error "backend start failed" }
 }
 function Start-Dev {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -NoNewWindow -WindowStyle Hidden
+  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -WindowStyle Hidden
   if ($p) { Set-Content -Path $pidFile -Value $p.Id; Write-Host "dev started on http://localhost:$Env:PORT" } else { Write-Error "backend dev start failed" }
 }
 function Stop-Server { if (Test-Path $pidFile) { $childPid = Get-Content $pidFile; Stop-Process -Id $childPid -Force -ErrorAction SilentlyContinue; Remove-Item $pidFile -Force } }

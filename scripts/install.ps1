@@ -49,7 +49,10 @@ Invoke-NpmInstall (Join-Path $root 'frontend')
 
 $beEnv = Join-Path $root 'backend-node/.env'
 if (-not (Test-Path $beEnv)) {
-  $jwt = [Convert]::ToBase64String((New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes(32))
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $jwt = [Convert]::ToBase64String($bytes)
   @(
     'BASE_PATH=/api/v1'
     'ALLOWED_ORIGINS=*'

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Gabriel Xia(加百列)
-export type User = { id: string; email: string; name?: string; passwordHash?: string }
+export type User = { id: string; email: string; name?: string; passwordHash: string }
 
 const users = new Map<string, User>()
 
