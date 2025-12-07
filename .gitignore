@@ -58,3 +58,5 @@ backend-python/.python-version
 .trae/documents/Git 历史重写：全仓 License_版权注入计划.md
 scripts/license-audit.py
 scripts/license-injector.py
+debug*.log
+*.port
