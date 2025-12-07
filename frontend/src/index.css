@@ -10,15 +10,29 @@ html, body, #root { height: 100%; }
 :root.dark[data-theme="blue"] { --bg: theme(colors.blue.bgDark); --surface: theme(colors.blue.surfaceDark); --border: theme(colors.blue.borderDark); --text: theme(colors.blue.textDark); --accent: theme(colors.blue.accentDark); --hero-bg: theme(colors.blue.heroDark); --bubble-bg: theme(colors.blue.bubbleBgDark); --bubble-border: theme(colors.blue.bubbleBorderDark); --bubble-text: theme(colors.blue.bubbleTextDark); }
 :root[data-theme="purple"] { --bg: theme(colors.purple.bgLight); --surface: theme(colors.purple.surfaceLight); --border: theme(colors.purple.borderLight); --text: theme(colors.purple.textLight); --accent: theme(colors.purple.accentLight); --hero-bg: theme(colors.purple.heroLight); --bubble-bg: theme(colors.purple.bubbleBgLight); --bubble-border: theme(colors.purple.bubbleBorderLight); --bubble-text: theme(colors.purple.bubbleTextLight); }
 :root.dark[data-theme="purple"] { --bg: theme(colors.purple.bgDark); --surface: theme(colors.purple.surfaceDark); --border: theme(colors.purple.borderDark); --text: theme(colors.purple.textDark); --accent: theme(colors.purple.accentDark); --hero-bg: theme(colors.purple.heroDark); --bubble-bg: theme(colors.purple.bubbleBgDark); --bubble-border: theme(colors.purple.bubbleBorderDark); --bubble-text: theme(colors.purple.bubbleTextDark); }
+:root[data-theme="holographic"] { --bg: theme(colors.holographic.bgLight); --surface: theme(colors.holographic.surfaceLight); --border: theme(colors.holographic.borderLight); --text: theme(colors.holographic.textLight); --accent: theme(colors.holographic.accentLight); --hero-bg: theme(colors.holographic.heroLight); --bubble-bg: theme(colors.holographic.bubbleBgLight); --bubble-border: theme(colors.holographic.bubbleBorderLight); --bubble-text: theme(colors.holographic.bubbleTextLight); }
+:root.dark[data-theme="holographic"] { --bg: theme(colors.holographic.bgDark); --surface: theme(colors.holographic.surfaceDark); --border: theme(colors.holographic.borderDark); --text: theme(colors.holographic.textDark); --accent: theme(colors.holographic.accentDark); --hero-bg: theme(colors.holographic.heroDark); --bubble-bg: theme(colors.holographic.bubbleBgDark); --bubble-border: theme(colors.holographic.bubbleBorderDark); --bubble-text: theme(colors.holographic.bubbleTextDark); }
 
-.theme-bg { background-color: var(--bg); }
-.theme-surface { background-color: var(--surface); }
-.theme-border { border-color: var(--border); }
-.theme-text { color: var(--text); }
-.theme-accent { color: var(--accent); }
-.theme-btn { background-color: var(--accent); color: #fff; }
+/* Holographic Background */
+[data-theme="holographic"].dark body {
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+    linear-gradient(rgba(5, 5, 16, 0.95), rgba(5, 5, 16, 0.95)),
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231f2937' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-attachment: fixed;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 60px 60px;
+}
 
-.card { background-color: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 12px 28px rgba(0,0,0,0.35); }
+.theme-bg { background-color: var(--bg); transition: background-color 0.3s, color 0.3s; }
+.theme-surface { background-color: var(--surface); transition: background-color 0.3s, border-color 0.3s; }
+.theme-border { border-color: var(--border); transition: border-color 0.3s; }
+.theme-text { color: var(--text); transition: color 0.3s; }
+.theme-accent { color: var(--accent); transition: color 0.3s; }
+.theme-btn { background-color: var(--accent); color: #fff; transition: background-color 0.3s; }
+.theme-focus-ring:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 50%, transparent); }
+
+.card { background-color: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 12px 28px rgba(0,0,0,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: background-color 0.3s, border-color 0.3s; }
 .hero { background: radial-gradient(110% 120% at 50% 10%, color-mix(in oklab, var(--accent) 30%, transparent) 0%, transparent 60%), var(--hero-bg); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
 .btn-accent { background-image: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 60%, #1f2937)); color: #fff; }
 .bubble { background-color: var(--bubble-bg); border: 1px solid var(--bubble-border); color: var(--bubble-text); border-radius: 9999px; padding: 0.125rem 0.5rem; font-size: 12px; }

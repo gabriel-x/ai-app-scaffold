@@ -9,46 +9,67 @@ export default {
     extend: {
       colors: {
         blue: {
-          bgLight: '#F9FAFB',
+          bgLight: '#F0F9FF',
           surfaceLight: '#FFFFFF',
-          borderLight: '#E5E7EB',
-          textLight: '#111827',
-          accentLight: '#2563EB',
-          heroLight: '#F5F8FF',
-          bubbleBgLight: '#E6F0FF',
-          bubbleBorderLight: '#93C5FD',
-          bubbleTextLight: '#1E3A8A',
+          borderLight: '#BAE6FD',
+          textLight: '#0C4A6E',
+          accentLight: '#0EA5E9',
+          heroLight: '#F0F9FF',
+          bubbleBgLight: '#E0F2FE',
+          bubbleBorderLight: '#7DD3FC',
+          bubbleTextLight: '#0369A1',
 
-          bgDark: '#0B1220',
-          surfaceDark: '#0F172A',
-          borderDark: '#1F2937',
-          textDark: '#E5E7EB',
-          accentDark: '#3B82F6',
-          heroDark: '#0F172A',
-          bubbleBgDark: '#17203A',
-          bubbleBorderDark: '#3B82F6',
-          bubbleTextDark: '#C7D2FE'
+          bgDark: '#020617', // Very dark blue/black
+          surfaceDark: '#0F172A', // Slate 900
+          borderDark: '#22D3EE', // Cyan 400 (Neon border)
+          textDark: '#F0F9FF', // Sky 50
+          accentDark: '#00F0FF', // Neon Cyan
+          heroDark: '#020617',
+          bubbleBgDark: '#164E63', // Cyan 900
+          bubbleBorderDark: '#22D3EE',
+          bubbleTextDark: '#CFFAFE'
         },
         purple: {
-          bgLight: '#FAF7FF',
+          bgLight: '#FFFBEB',
           surfaceLight: '#FFFFFF',
-          borderLight: '#E5E7EB',
-          textLight: '#1F1F29',
-          accentLight: '#7C3AED',
-          heroLight: '#F8F5FF',
-          bubbleBgLight: '#EFE7FF',
-          bubbleBorderLight: '#C4B5FD',
-          bubbleTextLight: '#5B21B6',
+          borderLight: '#FDE68A',
+          textLight: '#451A03',
+          accentLight: '#D97706',
+          heroLight: '#FFFBEB',
+          bubbleBgLight: '#FEF3C7',
+          bubbleBorderLight: '#FCD34D',
+          bubbleTextLight: '#92400E',
 
-          bgDark: '#100B1A',
-          surfaceDark: '#151022',
-          borderDark: '#2A2140',
-          textDark: '#EDEAF7',
-          accentDark: '#8B5CF6',
-          heroDark: '#151022',
-          bubbleBgDark: '#22173B',
-          bubbleBorderDark: '#8B5CF6',
-          bubbleTextDark: '#DDD6FE'
+          bgDark: '#1A120B', // Dark brown/black
+          surfaceDark: '#2C1F16', // Dark brown surface
+          borderDark: '#8B5A2B', // Bronze
+          textDark: '#E6DCC8', // Warm white
+          accentDark: '#D4AF37', // Gold
+          heroDark: '#1A120B',
+          bubbleBgDark: '#3E2C20',
+          bubbleBorderDark: '#CD7F32',
+          bubbleTextDark: '#FFE4C4'
+        },
+        holographic: {
+          bgLight: '#F0F2F5', // Light silver/grey
+          surfaceLight: '#FFFFFF',
+          borderLight: '#D1D5DB',
+          textLight: '#111827',
+          accentLight: '#10B981', // Emerald
+          heroLight: '#E5E7EB',
+          bubbleBgLight: '#D1FAE5',
+          bubbleBorderLight: '#34D399',
+          bubbleTextLight: '#065F46',
+
+          bgDark: '#050510', // Deepest Black/Blue
+          surfaceDark: 'rgba(20, 20, 35, 0.6)', // Glassy
+          borderDark: '#2E325A', // Dark purple/blue border
+          textDark: '#E2E8F0', // Slate 200
+          accentDark: '#00FF9D', // Neon Green
+          heroDark: '#050510',
+          bubbleBgDark: 'rgba(0, 255, 157, 0.1)',
+          bubbleBorderDark: '#00FF9D',
+          bubbleTextDark: '#00FF9D'
         }
       }
     }
