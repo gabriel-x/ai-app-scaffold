@@ -60,3 +60,4 @@ scripts/license-audit.py
 scripts/license-injector.py
 debug*.log
 *.port
+**/.tasks/

@@ -30,7 +30,8 @@ function Get-PidByPort($p) {
 function Start-Dev {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath npm -ArgumentList "run", "dev", "--", "--port", "$Env:PORT", "--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -WindowStyle Hidden
+  New-Item -ItemType File -Force -Path "$logDir/null" | Out-Null
+  $p = Start-Process -FilePath npm -ArgumentList "run", "dev", "--", "--port", "$Env:PORT", "--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -RedirectStandardInput "$logDir/null" -WindowStyle Hidden
   
   Start-Sleep -Seconds 3
   $realPid = Get-PidByPort $Env:PORT
@@ -58,7 +59,8 @@ function Start-Preview {
     }
   }
   else { Write-Error "frontend build start failed"; return }
-  $p = Start-Process -FilePath npm -ArgumentList "run", "preview", "--", "--port", "$Env:PORT", "--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -WindowStyle Hidden
+  New-Item -ItemType File -Force -Path "$logDir/null" | Out-Null
+  $p = Start-Process -FilePath npm -ArgumentList "run", "preview", "--", "--port", "$Env:PORT", "--strictPort" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/frontend.log" -RedirectStandardError "$logDir/frontend.err.log" -RedirectStandardInput "$logDir/null" -WindowStyle Hidden
   
   Start-Sleep -Seconds 3
   $realPid = Get-PidByPort $Env:PORT

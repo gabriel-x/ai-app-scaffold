@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gabriel Xia(加百列)
 import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '@/theme/useTheme'
-import { useState, useEffect, FormEvent } from 'react'
+import React, { useState, useEffect, FormEvent } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Search, Bell, Menu, CheckCircle2, Circle, MoreHorizontal, User, LogIn, LogOut, Settings } from 'lucide-react'

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Gabriel Xia(加百列)
+import React from 'react'
 import { Outlet } from 'react-router-dom'
 
 export function AuthLayout() {

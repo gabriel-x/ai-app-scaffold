@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Gabriel Xia(加百列)
-import { FormEvent, useState } from 'react'
+import React, { FormEvent, ChangeEvent, useState } from 'react'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
@@ -8,16 +8,25 @@ import { useAuth } from '@/hooks/useAuth'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const navigate = useNavigate()
   const location = useLocation() as any
   const { login } = useAuth()
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!email || !password || password.length < 8) {
       toast.error('请输入有效邮箱，密码至少8位')
       return
     }
+    
+    setIsSubmitting(true)
+    // Simulate delay for dynamic effect
+    await new Promise(resolve => setTimeout(resolve, 800))
+
     const ok = await login(email, password)
+    setIsSubmitting(false)
+
     if (ok) {
       toast.success('登录成功')
       const to = location.state?.from?.pathname || '/profile'
@@ -26,6 +35,7 @@ export default function Login() {
       toast.error('登录失败')
     }
   }
+
   return (
     <div className="space-y-6 relative z-10">
       <div className="text-center space-y-2">
@@ -34,11 +44,34 @@ export default function Login() {
       </div>
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="space-y-2">
-           <input className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-           <input className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+           <input 
+             className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" 
+             placeholder="Email" 
+             value={email} 
+             onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} 
+             disabled={isSubmitting}
+           />
+           <input 
+             className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" 
+             placeholder="Password" 
+             type="password" 
+             value={password} 
+             onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} 
+             disabled={isSubmitting}
+           />
         </div>
-        <button className="w-full py-3 rounded-xl bg-gradient-to-r from-[var(--accent)] to-emerald-500 text-white font-semibold shadow-lg shadow-[var(--accent)]/20 hover:shadow-[var(--accent)]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
-          Sign In
+        <button 
+          disabled={isSubmitting}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-[var(--accent)] to-emerald-500 text-white font-semibold shadow-lg shadow-[var(--accent)]/20 hover:shadow-[var(--accent)]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isSubmitting ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Signing In...
+            </>
+          ) : (
+            'Sign In'
+          )}
         </button>
       </form>
       <div className="text-center text-sm opacity-80">

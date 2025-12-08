@@ -41,7 +41,8 @@ function Start-Prod {
       return
     }
   } else { Write-Error "backend build start failed"; return }
-  $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -WindowStyle Hidden
+  New-Item -ItemType File -Force -Path "$logDir/null" | Out-Null
+  $p = Start-Process -FilePath npm -ArgumentList "run","start" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -RedirectStandardInput "$logDir/null" -WindowStyle Hidden
   
   Start-Sleep -Seconds 3
   $realPid = Get-PidByPort $Env:PORT
@@ -59,7 +60,8 @@ function Start-Prod {
 function Start-Dev {
   Load-Env
   Ensure-Port
-  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -WindowStyle Hidden
+  New-Item -ItemType File -Force -Path "$logDir/null" | Out-Null
+  $p = Start-Process -FilePath npm -ArgumentList "run","dev" -WorkingDirectory $root -PassThru -RedirectStandardOutput "$logDir/backend.log" -RedirectStandardError "$logDir/backend.err.log" -RedirectStandardInput "$logDir/null" -WindowStyle Hidden
   
   Start-Sleep -Seconds 3
   $realPid = Get-PidByPort $Env:PORT

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Gabriel Xia(加百列)
-import { FormEvent, useState } from 'react'
+import React, { FormEvent, ChangeEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
@@ -47,7 +47,7 @@ export default function Register() {
              className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" 
              placeholder="Email" 
              value={email} 
-             onChange={e => setEmail(e.target.value)} 
+             onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} 
              disabled={isSubmitting}
            />
            <input 
@@ -55,14 +55,14 @@ export default function Register() {
              placeholder="Password (min 8 chars)" 
              type="password" 
              value={password} 
-             onChange={e => setPassword(e.target.value)} 
+             onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} 
              disabled={isSubmitting}
            />
            <input 
              className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border theme-border focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/50 focus:outline-none transition-all placeholder:opacity-50 theme-text" 
              placeholder="Nickname" 
              value={name} 
-             onChange={e => setName(e.target.value)} 
+             onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)} 
              disabled={isSubmitting}
            />
         </div>

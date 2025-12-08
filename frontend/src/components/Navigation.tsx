@@ -6,13 +6,23 @@ import { useAuth } from '@/hooks/useAuth'
 export default function Navigation() {
   const location = useLocation()
   const { logout } = useAuth()
+  
+  const isActive = (path: string) => location.pathname === path
+    ? 'font-semibold text-[var(--accent)]'
+    : 'opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all'
+
   return (
-    <nav className="flex items-center justify-between p-4 border-b">
-      <div className="flex gap-4">
-        <Link to="/profile" className={location.pathname === '/profile' ? 'font-semibold' : ''}>个人主页</Link>
-        <Link to="/account" className={location.pathname === '/account' ? 'font-semibold' : ''}>账号设置</Link>
+    <nav className="flex items-center justify-between p-4 border-b theme-border backdrop-blur-sm bg-[var(--surface)]/50 sticky top-0 z-10">
+      <div className="flex gap-6">
+        <Link to="/profile" className={isActive('/profile')}>个人主页</Link>
+        <Link to="/account" className={isActive('/account')}>账号设置</Link>
       </div>
-      <button className="px-3 py-1 rounded bg-black text-white dark:bg-white dark:text-black" onClick={logout}>退出</button>
+      <button 
+        className="px-4 py-1.5 rounded-lg btn-accent text-sm font-medium shadow-md hover:shadow-lg transition-all active:scale-95" 
+        onClick={logout}
+      >
+        退出
+      </button>
     </nav>
   )
 }
