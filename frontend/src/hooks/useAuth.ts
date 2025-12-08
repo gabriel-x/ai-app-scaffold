@@ -3,7 +3,14 @@
 import { create } from 'zustand'
 import { api } from '@/lib/api'
 
-type User = { id: string; email: string; name?: string }
+type User = { 
+  id: string; 
+  email: string; 
+  name?: string;
+  avatar?: string;
+  nickname?: string;
+  username?: string;
+}
 
 type Store = {
   user?: User
