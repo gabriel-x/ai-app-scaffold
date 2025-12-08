@@ -356,9 +356,9 @@ function ThemeSelect() {
   const { palette, setPalette } = useTheme()
   return (
     <select value={palette} onChange={e => setPalette(e.target.value)} className="select select--small bg-transparent focus:ring-2 focus:ring-[var(--accent)] rounded cursor-pointer">
-      <option value="holographic">Theme 3 (Holographic)</option>
-      <option value="blue">Theme 1 (Neon)</option>
-      <option value="purple">Theme 2 (Luxury)</option>
+      <option value="holographic">Theme 1 (Holographic)</option>
+      <option value="blue">Theme 2 (Neon)</option>
+      <option value="purple">Theme 3 (Luxury)</option>
     </select>
   )
 }
