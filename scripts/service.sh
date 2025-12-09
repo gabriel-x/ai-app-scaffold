@@ -1,121 +1,314 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Gabriel Xia(加百列)
-set -euo pipefail
 
-cmd=${1:-help}
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-source "$ROOT/scripts/pretty.sh" 2>/dev/null || true
+# 总控服务管理脚本
+# 使用方法: ./service.sh start|stop|restart|status|start:frontend|stop:frontend|restart:frontend|status:frontend|start:node|stop:node|restart:node|status:node|start:python|stop:python|restart:python|status:python
 
-PID_DIR="$ROOT/scripts/pids"
-mkdir -p "$PID_DIR"
+# 脚本路径和项目根目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(dirname "$SCRIPT_DIR")"
 
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 打印带颜色的消息
+print_message() {
+    local color=$1
+    local message=$2
+    echo -e "${color}${message}${NC}"
+}
+
+# 显示横幅
+print_banner() {
+    local message=$1
+    print_message $BLUE "======================================"
+    print_message $BLUE "$message"
+    print_message $BLUE "======================================"
+}
+
+# 模块目录
 FE_DIR="$ROOT/frontend"
 NODE_DIR="$ROOT/backend-node"
 PY_DIR="$ROOT/backend-python"
 
-FE_CMD="${FE_CMD:-npm run dev}"
-NODE_CMD="${NODE_CMD:-npm run dev}"
-PY_CMD="${PY_CMD:-uvicorn app.main:app --port ${PORT:-8000}}"
+# PID文件位置（与各模块脚本保持一致）
+FE_PID_FILE="$ROOT/.frontend.pid"
+NODE_PID_FILE="$ROOT/.node.pid"
+PY_PID_FILE="$ROOT/.python.pid"
 
-start_service() {
-  n=$1; dir=$2; c=$3
-  pid_file="$PID_DIR/$n.pid"
-  if [ ! -d "$dir" ]; then
-    p_err "directory not found: $dir"
-    return 1
-  fi
-  if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    p_warn "$n already running (pid $(cat "$pid_file"))"
-    return 0
-  fi
-  p_info "starting $n..."
-  nohup bash -lc "cd \"$dir\" && $c" >/dev/null 2>&1 &
-  echo $! > "$pid_file"
-  p_ok "$n started (pid $(cat "$pid_file"))"
-}
-
-stop_service() {
-  n=$1
-  pid_file="$PID_DIR/$n.pid"
-  if [ ! -f "$pid_file" ]; then
-    p_warn "$n not running"
-    return 0
-  fi
-  pid=$(cat "$pid_file")
-  if kill -0 "$pid" 2>/dev/null; then
-    p_info "stopping $n (pid $pid)..."
-    kill "$pid" 2>/dev/null || true
-    for i in $(seq 1 20); do
-      if kill -0 "$pid" 2>/dev/null; then sleep 0.2; else break; fi
-    done
-    if kill -0 "$pid" 2>/dev/null; then
-      p_warn "$n still running, force kill"
-      kill -9 "$pid" 2>/dev/null || true
+# 检查服务是否运行
+is_running() {
+    local pid_file=$1
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        else
+            rm -f "$pid_file"
+            return 1
+        fi
     fi
-    p_ok "$n stopped"
-  else
-    p_warn "$n not alive"
-  fi
-  rm -f "$pid_file"
+    return 1
 }
 
-status_service() {
-  n=$1
-  pid_file="$PID_DIR/$n.pid"
-  if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    p_kv "$n" "running (pid $(cat \"$pid_file\"))"
-  else
-    p_kv "$n" "stopped"
-  fi
+# 启动前端服务
+start_frontend() {
+    if is_running "$FE_PID_FILE"; then
+        local pid=$(cat "$FE_PID_FILE")
+        print_message $YELLOW "前端服务已在运行中 (PID: $pid)"
+        return 0
+    fi
+    
+    print_message $BLUE "启动前端服务..."
+    
+    # 使用前端模块自己的启动脚本
+    "$FE_DIR/scripts/client-manager.sh" start
+    return $?
 }
 
-restart_service() { n=$1; dir=$2; c=$3; stop_service "$n"; start_service "$n" "$dir" "$c"; }
+# 停止前端服务
+stop_frontend() {
+    print_message $BLUE "停止前端服务..."
+    
+    # 使用前端模块自己的停止脚本
+    "$FE_DIR/scripts/client-manager.sh" stop
+    return $?
+}
 
-start_frontend() { start_service frontend "$FE_DIR" "$FE_CMD"; }
-stop_frontend() { stop_service frontend; }
-status_frontend() { status_service frontend; }
-restart_frontend() { restart_service frontend "$FE_DIR" "$FE_CMD"; }
+# 查看前端服务状态
+status_frontend() {
+    print_message $BLUE "前端服务状态:"
+    "$FE_DIR/scripts/client-manager.sh" status
+    return $?
+}
 
-start_node() { start_service node "$NODE_DIR" "$NODE_CMD"; }
-stop_node() { stop_service node; }
-status_node() { status_service node; }
-restart_node() { restart_service node "$NODE_DIR" "$NODE_CMD"; }
+# 重启前端服务
+restart_frontend() {
+    print_message $BLUE "重启前端服务..."
+    stop_frontend
+    sleep 3
+    start_frontend
+    return $?
+}
 
-start_python() { start_service python "$PY_DIR" "$PY_CMD"; }
-stop_python() { stop_service python; }
-status_python() { status_service python; }
-restart_python() { restart_service python "$PY_DIR" "$PY_CMD"; }
+# 启动后端Node服务
+start_node() {
+    if is_running "$NODE_PID_FILE"; then
+        local pid=$(cat "$NODE_PID_FILE")
+        print_message $YELLOW "后端Node服务已在运行中 (PID: $pid)"
+        return 0
+    fi
+    
+    print_message $BLUE "启动后端Node服务..."
+    
+    # 使用后端Node模块自己的启动脚本
+    "$NODE_DIR/scripts/server-manager.sh" start
+    return $?
+}
 
+# 停止后端Node服务
+stop_node() {
+    print_message $BLUE "停止后端Node服务..."
+    
+    # 使用后端Node模块自己的停止脚本
+    "$NODE_DIR/scripts/server-manager.sh" stop
+    return $?
+}
+
+# 查看后端Node服务状态
+status_node() {
+    print_message $BLUE "后端Node服务状态:"
+    "$NODE_DIR/scripts/server-manager.sh" status
+    return $?
+}
+
+# 重启后端Node服务
+restart_node() {
+    print_message $BLUE "重启后端Node服务..."
+    stop_node
+    sleep 3
+    start_node
+    return $?
+}
+
+# 启动后端Python服务
+start_python() {
+    if is_running "$PY_PID_FILE"; then
+        local pid=$(cat "$PY_PID_FILE")
+        print_message $YELLOW "后端Python服务已在运行中 (PID: $pid)"
+        return 0
+    fi
+    
+    print_message $BLUE "启动后端Python服务..."
+    
+    # 使用后端Python模块自己的启动脚本
+    "$PY_DIR/scripts/server-manager.sh" start
+    return $?
+}
+
+# 停止后端Python服务
+stop_python() {
+    print_message $BLUE "停止后端Python服务..."
+    
+    # 使用后端Python模块自己的停止脚本
+    "$PY_DIR/scripts/server-manager.sh" stop
+    return $?
+}
+
+# 查看后端Python服务状态
+status_python() {
+    print_message $BLUE "后端Python服务状态:"
+    "$PY_DIR/scripts/server-manager.sh" status
+    return $?
+}
+
+# 重启后端Python服务
+restart_python() {
+    print_message $BLUE "重启后端Python服务..."
+    stop_python
+    sleep 3
+    start_python
+    return $?
+}
+
+# 启动所有服务
+start_all() {
+    print_banner "Start All Services"
+    start_frontend
+    start_node
+    start_python
+}
+
+# 停止所有服务
+stop_all() {
+    print_banner "Stop All Services"
+    stop_frontend
+    stop_node
+    stop_python
+}
+
+# 重启所有服务
+restart_all() {
+    print_banner "Restart All Services"
+    restart_frontend
+    restart_node
+    restart_python
+}
+
+# 查看所有服务状态
+status_all() {
+    print_banner "Services Status"
+    status_frontend
+    echo
+    status_node
+    echo
+    status_python
+}
+
+# 显示帮助信息
+show_help() {
+    print_banner "Service Management Script"
+    echo ""
+    echo "使用方法: $0 {start|stop|restart|status|start:frontend|stop:frontend|restart:frontend|status:frontend|start:node|stop:node|restart:node|status:node|start:python|stop:python|restart:python|status:python|help}"
+    echo ""
+    echo "命令说明:"
+    echo "  start               - 启动所有服务"
+    echo "  stop                - 停止所有服务"
+    echo "  restart             - 重启所有服务"
+    echo "  status              - 查看所有服务状态"
+    echo "  start:frontend      - 启动前端服务"
+    echo "  stop:frontend       - 停止前端服务"
+    echo "  restart:frontend    - 重启前端服务"
+    echo "  status:frontend     - 查看前端服务状态"
+    echo "  start:node          - 启动后端Node服务"
+    echo "  stop:node           - 停止后端Node服务"
+    echo "  restart:node        - 重启后端Node服务"
+    echo "  status:node         - 查看后端Node服务状态"
+    echo "  start:python        - 启动后端Python服务"
+    echo "  stop:python         - 停止后端Python服务"
+    echo "  restart:python      - 重启后端Python服务"
+    echo "  status:python       - 查看后端Python服务状态"
+    echo "  help                - 显示帮助信息"
+    echo ""
+}
+
+# 主函数
+cmd=${1:-help}
 case "$cmd" in
-  start)
-    p_banner "Start All"
-    start_frontend; start_node; start_python ;;
-  stop)
-    p_banner "Stop All"
-    stop_frontend; stop_node; stop_python ;;
-  restart)
-    p_banner "Restart All"
-    restart_frontend; restart_node; restart_python ;;
-  status)
-    p_banner "Status"
-    status_frontend; status_node; status_python ;;
-  start:frontend) p_banner "Start Frontend"; start_frontend ;;
-  stop:frontend) p_banner "Stop Frontend"; stop_frontend ;;
-  restart:frontend) p_banner "Restart Frontend"; restart_frontend ;;
-  status:frontend) p_banner "Status Frontend"; status_frontend ;;
-  start:node) p_banner "Start Node"; start_node ;;
-  stop:node) p_banner "Stop Node"; stop_node ;;
-  restart:node) p_banner "Restart Node"; restart_node ;;
-  status:node) p_banner "Status Node"; status_node ;;
-  start:python) p_banner "Start Python"; start_python ;;
-  stop:python) p_banner "Stop Python"; stop_python ;;
-  restart:python) p_banner "Restart Python"; restart_python ;;
-  status:python) p_banner "Status Python"; status_python ;;
-  *)
-    p_usage "$0" \
-      "start" "stop" "restart" "status" \
-      "start:frontend" "stop:frontend" "restart:frontend" "status:frontend" \
-      "start:node" "stop:node" "restart:node" "status:node" \
-      "start:python" "stop:python" "restart:python" "status:python" ;;
+    start)
+        start_all
+        ;;
+    stop)
+        stop_all
+        ;;
+    restart)
+        restart_all
+        ;;
+    status)
+        status_all
+        ;;
+    start:frontend)
+        print_banner "Start Frontend"
+        start_frontend
+        ;;
+    stop:frontend)
+        print_banner "Stop Frontend"
+        stop_frontend
+        ;;
+    restart:frontend)
+        print_banner "Restart Frontend"
+        restart_frontend
+        ;;
+    status:frontend)
+        print_banner "Frontend Status"
+        status_frontend
+        ;;
+    start:node)
+        print_banner "Start Node Backend"
+        start_node
+        ;;
+    stop:node)
+        print_banner "Stop Node Backend"
+        stop_node
+        ;;
+    restart:node)
+        print_banner "Restart Node Backend"
+        restart_node
+        ;;
+    status:node)
+        print_banner "Node Backend Status"
+        status_node
+        ;;
+    start:python)
+        print_banner "Start Python Backend"
+        start_python
+        ;;
+    stop:python)
+        print_banner "Stop Python Backend"
+        stop_python
+        ;;
+    restart:python)
+        print_banner "Restart Python Backend"
+        restart_python
+        ;;
+    status:python)
+        print_banner "Python Backend Status"
+        status_python
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        print_message $RED "错误: 未知命令 '$cmd'"
+        echo ""
+        show_help
+        exit 1
+        ;;
 esac
+
+exit $?

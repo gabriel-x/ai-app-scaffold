@@ -11,7 +11,7 @@ Thumbs.db
 .idea/
 
 # Trae
-# keep .trae for project documents
+.trae/documents/
 
 # Logs
 frontend/logs/
@@ -38,26 +38,27 @@ test-results/
 # Python
 backend-python/.venv/
 backend-python/venv/
-backend-python/__pycache__/
-backend-python/.pytest_cache/
-backend-python/.mypy_cache/
-backend-python/.tox/
-backend-python/.cache/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.tox/
+**/.cache/
 backend-python/build/
 backend-python/dist/
-backend-python/*.pyc
-backend-python/*.pyo
-backend-python/.ropeproject/
-backend-python/.python-version
+**/*.pyc
+**/*.pyo
+**/.ropeproject/
+**/.python-version
 
 # Docker
 **/.env.local
 **/.env.development.local
 **/.env.production.local
 **/.env
-.trae/documents/Git 历史重写：全仓 License_版权注入计划.md
+
 scripts/license-audit.py
 scripts/license-injector.py
 debug*.log
 *.port
+*.pid
 **/.tasks/
