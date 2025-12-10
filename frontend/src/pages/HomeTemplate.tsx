@@ -47,6 +47,15 @@ export default function HomeTemplate() {
     setTodos(prev => prev.map(t => t.id === id ? { ...t, checked: !t.checked } : t))
   }
 
+  // Sample Table State
+  const [selectedSamples, setSelectedSamples] = useState<number[]>([])
+
+  const toggleSample = (id: number) => {
+    setSelectedSamples(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -238,14 +247,23 @@ export default function HomeTemplate() {
                    <div className="flex flex-col h-full">
                       <h4 className="text-sm font-semibold mb-3 opacity-80">Sample Table</h4>
                       <div className="space-y-2 text-sm overflow-y-auto flex-1 pr-2">
-                         {[1,2,3,4,5,6].map(i => (
-                           <div key={i} className="flex items-center gap-2 p-2 rounded hover:bg-white/5 transition-colors cursor-pointer group">
-                              <div className="w-4 h-4 rounded border theme-border group-hover:border-[var(--accent)] transition-colors" />
-                              <div className="flex-1 opacity-80 group-hover:text-[var(--accent)] transition-colors">Sample{i}</div>
+                         {[1,2,3,4,5,6].map(i => {
+                           const isChecked = selectedSamples.includes(i)
+                           return (
+                           <div 
+                              key={i} 
+                              onClick={() => toggleSample(i)}
+                              className={`flex items-center gap-2 p-2 rounded transition-colors cursor-pointer group ${isChecked ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                           >
+                              <div className={`w-4 h-4 rounded border transition-colors flex items-center justify-center ${isChecked ? 'bg-[var(--accent)] border-[var(--accent)]' : 'theme-border group-hover:border-[var(--accent)]'}`}>
+                                {isChecked && <CheckCircle2 size={12} className="text-white" />}
+                              </div>
+                              <div className={`flex-1 transition-colors ${isChecked ? 'text-[var(--accent)] opacity-100' : 'opacity-80 group-hover:text-[var(--accent)]'}`}>Sample{i}</div>
                               <div className="opacity-50">Londwin</div>
                               <div className="opacity-50 font-mono text-xs">BI80800{i}</div>
                            </div>
-                         ))}
+                           )
+                         })}
                       </div>
                       <div className="mt-4 flex justify-center gap-2 text-xs opacity-50">
                          <span className="cursor-pointer hover:text-[var(--accent)]">&lt;</span>

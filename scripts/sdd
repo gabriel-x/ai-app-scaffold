@@ -159,8 +159,24 @@ case "$1" in
     check)
         if [ "$3" == "plan" ]; then
             cmd_check_plan "$2"
+        elif [ "$3" == "implement" ]; then
+            # Currently implement check is same as plan check or just a placeholder
+            # We can add more strict checks here if needed (e.g. check if plan.md exists)
+            cmd_check_plan "$2"
+            PLAN_FILE="$CHANGES_DIR/$2/plan.md"
+             if [ ! -f "$PLAN_FILE" ]; then
+                echo -e "${RED}Error: Plan file not found for '$2'.${NC}"
+                exit 1
+            fi
+             # Check if plan contains placeholders
+            if grep -q "\[Link to spec.md\]" "$PLAN_FILE"; then
+                echo -e "${RED}Error: Plan file contains default template placeholders.${NC}"
+                echo "Please edit the Analysis section in $PLAN_FILE"
+                exit 1
+            fi
+            echo -e "${GREEN}✓ Plan for '$2' looks valid. You may proceed to implement.${NC}"
         else
-            echo "Unknown check type. Use 'plan'."
+            echo "Unknown check type. Use 'plan' or 'implement'."
             exit 1
         fi
         ;;
