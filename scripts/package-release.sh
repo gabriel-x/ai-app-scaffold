@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/scripts/pretty.sh" 2>/dev/null || true
 
-VERSION=$(cat "$ROOT/VERSION" 2>/dev/null || echo "1.0.0")
+VERSION=$(grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/VERSION" 2>/dev/null | sed 's/^v//' || echo "1.0.0")
 OUT_DIR="$ROOT/dist/releases"
 OUT_NAME="scaffold-v$VERSION.tar.gz"
 
@@ -18,18 +18,19 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
 copy_safe() {
-  src="$1"; dst="$2"; mkdir -p "$dst"; rsync -a --exclude node_modules --exclude dist --exclude .cache --exclude .DS_Store "$src/" "$dst/"
+  src="$1"; dst="$2"; mkdir -p "$dst"; rsync -a --exclude node_modules --exclude dist --exclude .cache --exclude .DS_Store --exclude venv --exclude __pycache__ --exclude .pytest_cache "$src/" "$dst/"
 }
 
-# Include frontend and backend-node
+# Include frontend, backend-node and backend-python
 copy_safe "$ROOT/frontend" "$STAGE/frontend"
 copy_safe "$ROOT/backend-node" "$STAGE/backend-node"
+copy_safe "$ROOT/backend-python" "$STAGE/backend-python"
 
 # Include scripts
 mkdir -p "$STAGE/scripts"
 cp "$ROOT/scripts/pretty.sh" "$STAGE/scripts/"
 cp "$ROOT/scripts/install.sh" "$STAGE/scripts/"
-cp "$ROOT/scripts/release.sh" "$STAGE/scripts/"
+cp "$ROOT/scripts/service.sh" "$STAGE/scripts/"
 
 # Include top-level docs and version
 cp "$ROOT/README.md" "$STAGE/README.md"

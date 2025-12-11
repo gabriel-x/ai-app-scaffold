@@ -74,5 +74,4 @@ install_dir "$ROOT/backend-node"
 install_dir "$ROOT/frontend"
 ensure_env_backend
 ensure_env_frontend
-p_ok "ready. use ./scripts/release.sh start"
-
+p_ok "ready. use ./scripts/service.sh start"
