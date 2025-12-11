@@ -88,6 +88,15 @@ function cmd_check_active {
     # OR simpler: Just check if 'changes' directory is not empty.
     
     if [ -z "$(ls -A $CHANGES_DIR 2>/dev/null)" ]; then
+        # Check if we are performing an archive operation (deleting from changes/ and adding to specs/)
+        DELETED_SPECS=$(git diff --cached --name-only --diff-filter=D | grep "docs-framework/changes/.*/spec.md" || true)
+        ADDED_ARCHIVES=$(git diff --cached --name-only --diff-filter=A | grep "docs-framework/specs/.*.md" || true)
+
+        if [ -n "$DELETED_SPECS" ] && [ -n "$ADDED_ARCHIVES" ]; then
+            echo -e "${GREEN}✓ Archive operation detected. Allowing commit.${NC}"
+            exit 0
+        fi
+
         # Check if we are actually modifying code files.
         # This part is tricky in a raw script without git context, 
         # but usually the hook calls this. 
