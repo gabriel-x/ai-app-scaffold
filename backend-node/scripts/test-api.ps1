@@ -3,11 +3,10 @@
 $ErrorActionPreference = 'Stop'
 
 # 定义颜色常量
-$RED = "\u001b[0;31m"
-$GREEN = "\u001b[0;32m"
-$YELLOW = "\u001b[1;33m"
-$BLUE = "\u001b[0;34m"
-$NC = "\u001b[0m" # No Color
+$RED = "Red"
+$GREEN = "Green"
+$YELLOW = "Yellow"
+$BLUE = "Blue"
 
 # 打印带颜色的消息
 function Print-Message {

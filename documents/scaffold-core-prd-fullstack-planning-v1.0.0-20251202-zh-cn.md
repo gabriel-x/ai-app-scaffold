@@ -30,6 +30,11 @@
 - Python：`PORT`、`JWT_SECRET`、`ALLOWED_ORIGINS`、`DB_URL`；`BASE_PATH=/api/v1`。
 - 文档：`.env.example` 与配置向导说明，所有库在 README 写明端口、环境项、示例值。
 
+## 端口配置规范
+- 后端服务：监听端口号从后端目录的`.env`文件读取配置，环境变量名为`PORT`或`BACKEND_PORT`，默认值为`10000`，有效范围为`10000-10099`
+- 前端服务：监听端口号从前端目录的`.env`文件读取配置，环境变量名为`FRONTEND_PORT`，默认值为`10100`，有效范围为`10100-10199`
+- 服务管理脚本：支持动态端口分配，在端口被占用时自动寻找范围内下一个可用端口
+
 ## 前端库（frontend/）
 - 技术栈：`React 18`、`Vite`、`TypeScript`、`react-router-dom@7`、`@tanstack/react-query`、`zustand`、`tailwindcss`、`tailwind-merge`、`lucide-react`、`sonner`、`recharts`。
 - 模块：

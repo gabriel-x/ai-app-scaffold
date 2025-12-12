@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Gabriel Xia(加百列)
 import os
-from fastapi import APIRouter, HTTPException
+import bcrypt
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
 from jose import jwt
+from ..security import auth_guard
 
 router = APIRouter()
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -30,11 +30,15 @@ def sign_tokens(user_id: str):
 def register(body: RegisterRequest):
     if body.email in users:
         raise HTTPException(status_code=400, detail={ 'code': 'ALREADY_EXISTS', 'message': 'Email exists' })
+    # Truncate password to max 72 bytes for bcrypt
+    truncated_password = body.password[:72]
+    # Hash password using bcrypt directly
+    hashed_password = bcrypt.hashpw(truncated_password.encode('utf-8'), bcrypt.gensalt())
     users[body.email] = {
         'id': str(len(users) + 1),
         'email': body.email,
         'name': body.name,
-        'passwordHash': pwd.hash(body.password)
+        'passwordHash': hashed_password.decode('utf-8')
     }
     u = users[body.email]
     return { 'ok': True, 'data': { 'id': u['id'], 'email': u['email'], 'name': u.get('name') } }
@@ -42,7 +46,9 @@ def register(body: RegisterRequest):
 @router.post('/login')
 def login(body: LoginRequest):
     u = users.get(body.email)
-    if not u or not pwd.verify(body.password, u['passwordHash']):
+    # Truncate password to max 72 bytes for bcrypt (same as registration)
+    truncated_password = body.password[:72]
+    if not u or not bcrypt.checkpw(truncated_password.encode('utf-8'), u['passwordHash'].encode('utf-8')):
         raise HTTPException(status_code=401, detail={ 'code': 'UNAUTHORIZED', 'message': 'Invalid credentials' })
     return sign_tokens(u['id'])
 
@@ -58,7 +64,10 @@ def refresh(body: dict):
         raise HTTPException(status_code=401, detail={ 'code': 'UNAUTHORIZED', 'message': 'Invalid refresh token' })
 
 @router.get('/me')
-def me(token: str | None = None):
-    # 为简化演示，直接返回固定示例；真实实现应读取 user_id 并查询
-    return { 'id': '1', 'email': 'demo@example.com', 'name': 'Demo' }
+async def me(request: Request, _=Depends(auth_guard)):
+    user_id = request.state.user_id
+    for u in users.values():
+        if u['id'] == user_id:
+            return { 'id': u['id'], 'email': u['email'], 'name': u.get('name') }
+    raise HTTPException(status_code=401, detail={ 'code': 'UNAUTHORIZED', 'message': 'Not found' })
 

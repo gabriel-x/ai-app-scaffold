@@ -1,31 +1,90 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Gabriel Xia(加百列)
+# Copyright (c) 2025 Gabriel Xia
 Param([string]$cmd = "help")
 
-# 定义颜色常量
-$RED = "\u001b[0;31m"
-$GREEN = "\u001b[0;32m"
-$YELLOW = "\u001b[1;33m"
-$BLUE = "\u001b[0;34m"
-$NC = "\u001b[0m" # No Color
+Write-Host "Backend Python Service Manager"
+Write-Host "Command: $cmd"
 
-# 打印带颜色的消息
-function Print-Message {
-    param(
-        [string]$Color,
-        [string]$Message
-    )
-    Write-Host -ForegroundColor $Color "$Message"
-}
-
-# 脚本路径和项目根目录
+# Script paths and project root
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR)
 $BACKEND_DIR = Join-Path $PROJECT_ROOT "backend-python"
 $PID_FILE = Join-Path $PROJECT_ROOT ".python.pid"
 $LOG_FILE = Join-Path $BACKEND_DIR "logs\backend.log"
 
-# 确保日志目录存在
+# Virtual environment configuration
+$VENV = Join-Path $BACKEND_DIR "venv"
+
+# Improved Python detection logic with better error handling
+function Find-Python {
+    # First try to use the python command (most common)
+    try {
+        $pythonCmd = Get-Command python -ErrorAction Stop
+        return $pythonCmd.Source
+    } catch {
+        # If python command fails, try python3
+        try {
+            $python3Cmd = Get-Command python3 -ErrorAction Stop
+            return $python3Cmd.Source
+        } catch {
+            # If both fail, try to find Python in common locations
+            # Check common Python installation paths
+            $commonPaths = @(
+                "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+                "C:\Program Files\Python310\python.exe",
+                "C:\Program Files\Python311\python.exe",
+                "C:\Program Files\Python312\python.exe",
+                "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps\python.exe",
+                "C:\Python310\python.exe",
+                "C:\Python311\python.exe",
+                "C:\Python312\python.exe"
+            )
+            
+            foreach ($path in $commonPaths) {
+                if (Test-Path $path) {
+                    return $path
+                }
+            }
+            
+            # Check PATH environment variable for any Python executable
+            $pathDirs = $env:PATH -split ';'
+            foreach ($dir in $pathDirs) {
+                $potentialPaths = @(
+                    "$dir\python.exe",
+                    "$dir\python3.exe"
+                )
+                
+                foreach ($potentialPath in $potentialPaths) {
+                    if (Test-Path $potentialPath) {
+                        return $potentialPath
+                    }
+                }
+            }
+            
+            return $null
+        }
+    }
+}
+
+# Find Python executable
+$PYTHON_BIN = Find-Python
+
+# Debug information
+if ($PYTHON_BIN) {
+    Write-Host "Found Python at: $PYTHON_BIN"
+    try {
+        $pythonVersion = & $PYTHON_BIN --version 2>&1
+        Write-Host "Python version: $pythonVersion"
+    } catch {
+        Write-Host "Could not determine Python version."
+    }
+} else {
+    Write-Host "Warning: Could not find Python executable through standard methods."
+}
+
+# Ensure log directory exists
 function Ensure-LogDir {
     $logDir = Split-Path -Parent $LOG_FILE
     if (-not (Test-Path $logDir)) {
@@ -33,33 +92,55 @@ function Ensure-LogDir {
     }
 }
 
-# 加载环境变量
-function Load-Env {
-    # 加载项目根目录的环境变量
-    if (Test-Path (Join-Path $PROJECT_ROOT ".env")) {
-        Get-Content (Join-Path $PROJECT_ROOT ".env") | ForEach-Object {
-            $line = $_.Trim()
-            # 跳过注释行和空行
-            if ($line.StartsWith('#') -or [string]::IsNullOrWhiteSpace($line)) {
-                return
+# Check if backend service is running
+function Is-Running {
+    if (Test-Path $PID_FILE) {
+        $processId = Get-Content $PID_FILE
+        try {
+            $process = Get-Process -Id $processId -ErrorAction Stop
+            
+            # For Uvicorn with reloader, find the actual server child process
+            try {
+                $childProcesses = Get-WmiObject Win32_Process -Filter "ParentProcessId=$processId" 2>$null
+                if ($childProcesses) {
+                    foreach ($childProc in $childProcesses) {
+                        if ($childProc.CommandLine -match "uvicorn" -and $childProc.CommandLine -notmatch "reloader") {
+                            return $true, $childProc.ProcessId
+                        }
+                    }
+                }
+            } catch {
+                # If we can't find child processes, return the parent
+                return $true, $processId
             }
-            # 导出有效的环境变量
-            if ($line -match '^[A-Za-z_][A-Za-z0-9_]*=') {
-                $k, $v = $line -split '=', 2
-                Set-Item -Path Env:$k -Value $v
-            }
+            
+            return $true, $processId
+        } catch {
+            Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
+            return $false, 0
         }
     }
+    return $false, 0
+}
 
-    # 加载后端特定的环境变量
-    if (Test-Path (Join-Path $BACKEND_DIR ".env")) {
-        Get-Content (Join-Path $BACKEND_DIR ".env") | ForEach-Object {
+# Load environment variables
+function Load-Env {
+    param(
+        [string]$EnvFile
+    )
+    if (Test-Path $EnvFile) {
+        Get-Content $EnvFile | ForEach-Object {
             $line = $_.Trim()
-            # 跳过注释行和空行
+            # Skip comment lines and empty lines
             if ($line.StartsWith('#') -or [string]::IsNullOrWhiteSpace($line)) {
                 return
             }
-            # 导出有效的环境变量
+            # Skip lines that only contain spaces and comments
+            $strippedLine = $line -replace '\s+', ''
+            if ($strippedLine.StartsWith('#') -or [string]::IsNullOrWhiteSpace($strippedLine)) {
+                return
+            }
+            # Export valid environment variables
             if ($line -match '^[A-Za-z_][A-Za-z0-9_]*=') {
                 $k, $v = $line -split '=', 2
                 Set-Item -Path Env:$k -Value $v
@@ -68,387 +149,550 @@ function Load-Env {
     }
 }
 
-# 设置默认端口和端口范围
-function Set-BackendPort {
-    # 缺省后端端口号是10000，允许的动态范围是10000-10099
+# Print colored message
+function Print-Message {
+    param(
+        [string]$Color,
+        [string]$Message
+    )
+    # Simplify color output to avoid encoding issues
+    switch ($Color) {
+        "Red" {
+            Write-Host -ForegroundColor Red "$Message"
+        }
+        "Green" {
+            Write-Host -ForegroundColor Green "$Message"
+        }
+        "Yellow" {
+            Write-Host -ForegroundColor Yellow "$Message"
+        }
+        "Blue" {
+            Write-Host -ForegroundColor Blue "$Message"
+        }
+        default {
+            Write-Host "$Message"
+        }
+    }
+}
+
+# Check if service is accessible
+function Is-Service-Accessible {
+    param(
+        [int]$Port
+    )
+    try {
+        # Use netstat to check if port is listening - more reliable than web requests
+        $netstatOutput = netstat -ano | findstr :$Port | findstr LISTENING 2>&1
+        return [bool]$netstatOutput
+    } catch {
+        return $false
+    }
+}
+
+# Start backend service
+function Start-Backend {
+    # Check if Python is available
+    if (-not $PYTHON_BIN) {
+        Print-Message "Red" "[ERROR] Python interpreter not found. Please install Python first."
+        return 1
+    }
+    
+    # Load environment variables
+    Load-Env (Join-Path $PROJECT_ROOT ".env")
+    Load-Env (Join-Path $BACKEND_DIR ".env")
+    
+    # Set default port and port range
+    # Default backend port is 10000, allowed dynamic range is 10000-10099
     $BACKEND_DEFAULT_PORT = 10000
     $BACKEND_PORT_RANGE = "10000-10099"
-
-    # 从.env文件读取端口配置
-    if (Test-Path (Join-Path $PROJECT_ROOT ".env")) {
-        $envContent = Get-Content (Join-Path $PROJECT_ROOT ".env")
-        
-        # 读取BACKEND_PORT
-        $backendPortLine = $envContent | Where-Object { $_ -match '^[\s]*BACKEND_PORT=' }
-        if ($backendPortLine) {
-            $BACKEND_PORT = $backendPortLine -replace '^[\s]*BACKEND_PORT=', '' -replace '\s+$', ''
-        } else {
-            $BACKEND_PORT = $BACKEND_DEFAULT_PORT
-        }
-        
-        # 读取BACKEND_PORT_RANGE
-        $backendPortRangeLine = $envContent | Where-Object { $_ -match '^[\s]*BACKEND_PORT_RANGE=' }
-        if ($backendPortRangeLine) {
-            $BACKEND_PORT_RANGE = $backendPortRangeLine -replace '^[\s]*BACKEND_PORT_RANGE=', '' -replace '\s+$', ''
-        }
-    } else {
+    
+    # Read port configuration from .env file
+    $BACKEND_PORT = $Env:BACKEND_PORT -as [int]
+    if (-not $BACKEND_PORT) {
         $BACKEND_PORT = $BACKEND_DEFAULT_PORT
     }
-
-    # 提取端口范围的起始和结束值
-    $BACKEND_PORT_START, $BACKEND_PORT_END = $BACKEND_PORT_RANGE -split '-'
-
-    # 检查端口是否被占用的函数
-    function Is-PortOccupied {
-        param([int]$Port)
-        $inUse = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-        return $inUse -ne $null
-    }
-
-    # 检查端口是否为本应用占用的函数
-    function Is-AppPort {
-        param([int]$Port)
-        $result = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-        if ($result) {
-            $pid = $result.Line.Trim() -split '\s+' | Select-Object -Last 1
-            if ($pid -and (Get-Process -Id $pid -ErrorAction SilentlyContinue)) {
-                $process = Get-Process -Id $pid
-                if ($process.Path -like "*python.exe" -or $process.Path -like "*uvicorn*" -or $process.Path -like "*pip*" ) {
-                    $cmdLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $pid").CommandLine
-                    if ($cmdLine -match "$BACKEND_DIR" -or $cmdLine -match "uvicorn" -or $cmdLine -match "python.*$Port") {
-                        return $true
-                    }
-                }
+    
+    # Extract port range start and end values
+    $rangeParts = $BACKEND_PORT_RANGE -split "-"
+    $BACKEND_PORT_START = [int]$rangeParts[0]
+    $BACKEND_PORT_END = [int]$rangeParts[1]
+    
+    # Check if port is occupied function
+    function Is-Port-Occupied {
+        param(
+            [int]$port
+        )
+        try {
+            $netstatOutput = netstat -ano | findstr :$port 2>&1
+            if ($netstatOutput -and $netstatOutput -match "LISTENING") {
+                return $true
             }
+        } catch {
+            # Ignore errors
         }
         return $false
     }
-
-    # 查找可用端口的函数
-    function Find-AvailablePort {
-        param([int]$Start, [int]$End, [int]$Current)
+    
+    # Find available port function
+    function Find-Available-Port {
+        param(
+            [int]$start,
+            [int]$end,
+            [int]$current
+        )
         
-        # 先检查当前端口是否可用或为本应用占用
-        if (-not (Is-PortOccupied $Current) -or (Is-AppPort $Current)) {
-            return $Current
+        # First check if current port is available
+        if (-not (Is-Port-Occupied $current)) {
+            return $current
         }
         
-        # 从当前端口开始查找可用端口
-        for ($port = $Current; $port -le $End; $port++) {
-            if (-not (Is-PortOccupied $port)) {
+        # Check ports from current to end
+        for ($port = $current; $port -le $end; $port++) {
+            if (-not (Is-Port-Occupied $port)) {
                 return $port
             }
         }
         
-        # 如果从当前端口到结束都没有可用端口，从起始端口到当前端口前一个查找
-        for ($port = $Start; $port -lt $Current; $port++) {
-            if (-not (Is-PortOccupied $port)) {
+        # If no available port from current to end, check from start to current-1
+        for ($port = $start; $port -lt $current; $port++) {
+            if (-not (Is-Port-Occupied $port)) {
                 return $port
             }
         }
         
-        # 没有可用端口
+        # No available port found
         return $null
     }
-
-    # 确保端口可用
-    $availablePort = Find-AvailablePort $BACKEND_PORT_START $BACKEND_PORT_END $BACKEND_PORT
-    if (-not $availablePort) {
-        Print-Message $RED "错误: 无法在端口范围 $BACKEND_PORT_RANGE 内找到可用端口"
-        exit 1
-    }
-
-    $Env:BACKEND_PORT = $availablePort
-    $Env:PORT = $availablePort
-    return $availablePort
-}
-
-# 检查后端服务是否运行
-function Is-Running {
-    if (Test-Path $PID_FILE) {
-        $pid = Get-Content $PID_FILE
-        if (Get-Process -Id $pid -ErrorAction SilentlyContinue) {
-            return $true
-        } else {
-            Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
-            return $false
-        }
-    }
-    return $false
-}
-
-# 检查端口是否被占用
-function Check-Port {
-    param([int]$Port)
-    $inUse = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-    return $inUse -ne $null
-}
-
-# 获取占用指定端口的进程ID
-function Get-PidByPort {
-    param([int]$Port)
-    $result = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-    if ($result) {
-        $parts = $result.Line.Trim() -split '\s+'
-        return $parts[-1]
-    }
-    return $null
-}
-
-# 启动后端服务
-function Start-Backend {
-    if (Is-Running) {
-        $pid = Get-Content $PID_FILE
-        Print-Message $YELLOW "后端服务已在运行中 (PID: $pid)"
-        return
-    }
     
-    $BACKEND_PORT = Set-BackendPort
-    
-    # 检查端口是否被占用
-    if (Check-Port $BACKEND_PORT) {
-        Print-Message $RED "错误: 端口 $BACKEND_PORT 已被占用"
-        Print-Message $YELLOW "请使用以下命令查看占用进程: netstat -ano | findstr :$BACKEND_PORT"
-        return
+    # Ensure port is available
+    $availablePort = Find-Available-Port $BACKEND_PORT_START $BACKEND_PORT_END $BACKEND_PORT
+    if ($availablePort -eq $null) {
+        Print-Message "Red" "Error: Cannot find available port in range $BACKEND_PORT_RANGE"
+        return 1
     }
+    $BACKEND_PORT = $availablePort
     
-    Print-Message $BLUE "启动后端Python服务..."
-    
-    # 确保在后端目录
-    Set-Location $BACKEND_DIR
+    # Check if service is already running
+    $isRunning, $runningProcessId = Is-Running
+    if ($isRunning) {
+        Print-Message "Yellow" "Backend service is already running (PID: $runningProcessId)"
+        return 0
+    }
     
     Ensure-LogDir
     
-    # 启动uvicorn服务器
-    Print-Message $BLUE "DEBUG: 计划使用端口 BACKEND_PORT=$BACKEND_PORT"
-    $startArgs = @(
-        "app.main:app",
-        "--host", "0.0.0.0",
-        "--port", "$BACKEND_PORT"
-    )
+    Print-Message "Blue" "Starting backend service..."
+    Print-Message "Blue" "Using port: $BACKEND_PORT"
     
-    $process = Start-Process -FilePath uvicorn -ArgumentList $startArgs -WorkingDirectory $BACKEND_DIR -PassThru -RedirectStandardOutput $LOG_FILE -RedirectStandardError $LOG_FILE -WindowStyle Hidden
-    
-    # 保存PID
-    $process.Id | Set-Content $PID_FILE
-    
-    # 等待服务启动
-    Start-Sleep -Seconds 5
-    
-    if (Is-Running) {
-        Print-Message $GREEN "✓ 后端服务启动成功 (PID: $($process.Id))"
-        Print-Message $BLUE "API地址: http://localhost:$BACKEND_PORT"
+    # Check if virtual environment exists, create if not
+    $pythonExePath = Join-Path (Join-Path $VENV "Scripts") "python.exe"
+    if (-not (Test-Path $pythonExePath)) {
+        Print-Message "Blue" "Creating virtual environment..."
         
-        # 检查健康状态
-        if (Get-Command curl -ErrorAction SilentlyContinue) {
-            Start-Sleep -Seconds 2
-            try {
-                curl -s "http://localhost:$BACKEND_PORT/health" | Out-Null
-                Print-Message $GREEN "✓ 后端服务健康检查通过"
-            } catch {
-                Print-Message $YELLOW "⚠ 后端服务启动但健康检查失败"
+        # Use a more reliable approach to execute Python commands
+        $venvCreationResult = & $PYTHON_BIN -m venv $VENV 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Print-Message "Red" "[ERROR] Failed to create virtual environment: $venvCreationResult"
+            return 1
+        }
+        
+        # Check if virtual environment was actually created
+        if (-not (Test-Path $pythonExePath)) {
+            Print-Message "Red" "[ERROR] Virtual environment creation failed: $pythonExePath not found"
+            return 1
+        }
+        
+        # Upgrade pip
+        Print-Message "Blue" "Upgrading pip..."
+        $pipUpgradeResult = & "$VENV\Scripts\python.exe" -m pip install -U pip wheel setuptools --disable-pip-version-check -q 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Print-Message "Red" "[ERROR] Failed to upgrade pip: $pipUpgradeResult"
+            return 1
+        }
+        
+        # Install dependencies
+        Print-Message "Blue" "Installing dependencies..."
+        if (Test-Path (Join-Path $BACKEND_DIR "requirements.txt")) {
+            $installResult = & "$VENV\Scripts\python.exe" -m pip install -r "requirements.txt" --disable-pip-version-check --no-input -q 2>&1
+        } else {
+            $installResult = & "$VENV\Scripts\python.exe" -m pip install fastapi uvicorn python-jose[cryptography] passlib[bcrypt] pydantic[email] pytest httpx --disable-pip-version-check --no-input -q 2>&1
+        }
+        
+        if ($LASTEXITCODE -ne 0) {
+            Print-Message "Red" "[ERROR] Failed to install dependencies: $installResult"
+            return 1
+        }
+    }
+    
+    # Start Uvicorn service using Start-Process, this is the most reliable way
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = "powershell.exe"
+    $startInfo.Arguments = "-NoProfile -WindowStyle Hidden -Command cd '$BACKEND_DIR'; `$env:PORT=$BACKEND_PORT; `$env:BACKEND_PORT=$BACKEND_PORT; & '$VENV\Scripts\uvicorn.exe' app.main:app --port $BACKEND_PORT --host 127.0.0.1 --reload 2>&1 | Out-File '$LOG_FILE' -Append"
+    $startInfo.WorkingDirectory = $BACKEND_DIR
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $process.Start() | Out-Null
+    
+    # Get PowerShell process ID
+    $psProcessId = $process.Id
+    
+    Print-Message "Blue" "Using environment: `$env:BACKEND_PORT=$BACKEND_PORT; `$env:PORT=$BACKEND_PORT"
+    
+    # Wait for service to start
+    Print-Message "Blue" "Waiting for service to start..."
+    Start-Sleep -Seconds 15
+    
+    # Find Python process in child processes
+    $pythonProcessId = 0
+    
+    # First try to find all Python processes and check if they belong to this project
+    try {
+        # Get all Python processes
+        $pythonProcesses = Get-Process -Name python -ErrorAction SilentlyContinue
+        if ($pythonProcesses) {
+            Print-Message "Blue" "Found Python processes: $($pythonProcesses.Count)"
+            foreach ($pythonProc in $pythonProcesses) {
+                Print-Message "Blue" "Checking Python PID: $($pythonProc.Id)"
+                # Check process command line, confirm it's our project's service
+                $cmdLine = (Get-WmiObject Win32_Process -Filter "ProcessId=$($pythonProc.Id)" 2>$null).CommandLine
+                if ($cmdLine -match "uvicorn" -and $cmdLine -match "app.main:app") {
+                    $pythonProcessId = $pythonProc.Id
+                    Print-Message "Blue" "Found matching Python process: $pythonProcessId"
+                    break
+                }
             }
         }
-        return
+    } catch {
+        Print-Message "Yellow" "Error finding Python processes: $_.Exception.Message"
+    }
+    
+    # If not found, try to find by checking all listening ports for Python processes
+    if (-not $pythonProcessId) {
+        try {
+            # Use netstat to find all LISTENING connections
+            $netstatOutput = netstat -ano | findstr LISTENING 2>&1
+            if ($netstatOutput) {
+                Print-Message "Blue" "Checking all listening ports..."
+                $netstatOutput | ForEach-Object {
+                    $parts = $_ -split '\s+' | Where-Object { $_ }
+                    if ($parts.Count -ge 5) {
+                        $port = $parts[1] -replace '.*:', ''
+                        $portPid = $parts[4]
+                        
+                        # Check if this PID is a Python process
+                        try {
+                            $proc = Get-Process -Id $portPid -ErrorAction Stop
+                            if ($proc.Name -eq "python") {
+                                Print-Message "Blue" "Found Python process $portPid listening on port $port"
+                                $pythonProcessId = $portPid
+                                $BACKEND_PORT = $port -as [int] # Update to actual port being used
+                                break
+                            }
+                        } catch {
+                            # Ignore non-existent processes
+                        }
+                    }
+                }
+            }
+        } catch {
+            Print-Message "Yellow" "Error checking listening ports: $_.Exception.Message"
+        }
+    }
+    
+    # If Python process is found, save PID
+    if ($pythonProcessId) {
+        $pythonProcessId | Set-Content $PID_FILE -Force
+        
+        Print-Message "Green" "[OK] Backend service started successfully (PID: $pythonProcessId)"
+        Print-Message "Blue" "Access address: http://localhost:$BACKEND_PORT"
+        
+        # Check service accessibility
+        Print-Message "Blue" "Checking service accessibility..."
+        Start-Sleep -Seconds 5
+        if (Is-Service-Accessible $BACKEND_PORT) {
+            Print-Message "Green" "[OK] Backend service is accessible"
+        } else {
+            Print-Message "Yellow" "[WARN] Backend service started but temporarily inaccessible"
+        }
+        return 0
     } else {
-        Print-Message $RED "✗ 后端服务启动失败"
-        Print-Message $YELLOW "请查看日志: $LOG_FILE"
+        Print-Message "Red" "[ERROR] Failed to start backend service"
+        Print-Message "Yellow" "Please check logs: $LOG_FILE"
+        return 1
     }
 }
 
-# 停止后端服务
+# Stop backend service
 function Stop-Backend {
-    $BACKEND_PORT = Set-BackendPort
-    
-    if (-not (Is-Running)) {
-        # 即使没有PID文件，也尝试根据端口清理残留进程
-        if (Check-Port $BACKEND_PORT) {
-            Print-Message $YELLOW "检测到端口 $BACKEND_PORT 有进程监听，尝试清理..."
-            $portPid = Get-PidByPort $BACKEND_PORT
-            if ($portPid) {
-                Print-Message $YELLOW "清理残留的端口监听进程..."
-                Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
+    # Check if port 10001 is in use
+    $portInUse = $false
+    $portPid = 0
+    try {
+        $netstatOutput = netstat -ano | findstr :10001 | findstr LISTENING 2>&1
+        if ($netstatOutput) {
+            $portInUse = $true
+            $parts = $netstatOutput -split '\s+' | Where-Object { $_ }
+            if ($parts.Count -ge 5) {
+                $portPid = $parts[4]
             }
-            Start-Sleep -Seconds 2
-            if (Check-Port $BACKEND_PORT) {
-                Print-Message $RED "✗ 警告: 端口 $BACKEND_PORT 仍被占用"
-                $remainingPids = Get-PidByPort $BACKEND_PORT
-                if ($remainingPids) {
-                    Print-Message $YELLOW "占用端口的进程: $remainingPids"
-                }
-                return
+            Print-Message "Blue" "Port 10001 is in use by PID: $portPid"
+        }
+    } catch {
+        Print-Message "Yellow" "Error checking port 10001: $_.Exception.Message"
+    }
+    
+    # Get all Python processes related to our project
+    $pythonProcesses = @()
+    
+    # First, check all Python processes
+    $allPythonProcesses = Get-Process -Name python -ErrorAction SilentlyContinue
+    if ($allPythonProcesses) {
+        Print-Message "Blue" "Found $($allPythonProcesses.Count) Python processes"
+        
+        foreach ($proc in $allPythonProcesses) {
+            Print-Message "Blue" "Checking Python PID: $($proc.Id)"
+            
+            # Always add Python processes if port is in use
+            if ($portInUse) {
+                $pythonProcesses += $proc
+                Print-Message "Blue" "Added process $($proc.Id) to stop list (port is in use)"
             } else {
-                Print-Message $GREEN "✓ 已清理端口占用，后端服务未运行"
-                return
+                # Only check command line if port is not in use
+                # Use alternative method to get command line
+                $cmdLine = ""
+                try {
+                    # Method 1: WMIC
+                    $cmdLine = wmic process where ProcessId=$($proc.Id) get CommandLine /format:list 2>&1 | findstr CommandLine | ForEach-Object { $_.Split('=')[1] } 2>$null
+                    if (-not $cmdLine) {
+                        # Method 2: Get-WmiObject (fallback)
+                        $wmiProc = Get-WmiObject Win32_Process -Filter "ProcessId=$($proc.Id)" 2>$null
+                        if ($wmiProc) {
+                            $cmdLine = $wmiProc.CommandLine
+                        }
+                    }
+                } catch {
+                    Print-Message "Yellow" "Error getting command line for PID $($proc.Id): $_.Exception.Message"
+                }
+                
+                Print-Message "Blue" "Command line: $cmdLine"
+                
+                # Check if this process is related to our project
+                if ($cmdLine -match "uvicorn" -or $cmdLine -match "app.main:app" -or $cmdLine -match "spawn_main") {
+                    $pythonProcesses += $proc
+                    Print-Message "Blue" "Added process $($proc.Id) to stop list"
+                }
             }
         }
-        Print-Message $YELLOW "后端服务未运行"
-        return
+    } else {
+        Print-Message "Blue" "No Python processes found"
     }
     
-    $pid = Get-Content $PID_FILE
-    Print-Message $BLUE "停止后端服务 (PID: $pid)..."
-    
-    # 尝试优雅停止主进程
-    Stop-Process -Id $pid -ErrorAction SilentlyContinue
-    
-    # 等待进程结束
-    $count = 0
-    while (Get-Process -Id $pid -ErrorAction SilentlyContinue -and $count -lt 15) {
-        Start-Sleep -Seconds 1
-        $count++
+    # Add the port PID directly if we found it and it's not already in our list
+    if ($portInUse -and $portPid -gt 0) {
+        $portProcFound = $false
+        foreach ($proc in $pythonProcesses) {
+            if ($proc.Id -eq $portPid) {
+                $portProcFound = $true
+                break
+            }
+        }
+        if (-not $portProcFound) {
+            # We can't get the process object, but we can still taskkill it
+            $pythonProcesses += [PSCustomObject]@{ Id = $portPid }
+            Print-Message "Blue" "Added port 10001 PID $portPid to stop list"
+        }
     }
     
-    # 如果主进程仍在运行，强制杀死
-    if (Get-Process -Id $pid -ErrorAction SilentlyContinue) {
-        Print-Message $YELLOW "强制停止后端服务..."
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    if ($pythonProcesses.Count -eq 0 -and -not $portInUse) {
+        Print-Message "Yellow" "Backend service is not running"
+        return 0
     }
     
-    # 清理端口占用
-    $portPid = Get-PidByPort $BACKEND_PORT
-    if ($portPid) {
-        Print-Message $YELLOW "清理本项目的端口监听进程..."
-        Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
+    # Get all Python processes related to our project and all processes listening on our port
+    $processesToStop = @()
+    
+    # Add our identified Python processes
+    foreach ($proc in $pythonProcesses) {
+        $processesToStop += $proc.Id
     }
     
+    # Add processes listening on port 10001
+    try {
+        $netstatOutput = netstat -ano | findstr :10001 | findstr LISTENING 2>&1
+        if ($netstatOutput) {
+            $parts = $netstatOutput -split '\s+' | Where-Object { $_ }
+            if ($parts.Count -ge 5) {
+                $portPid = $parts[4]
+                if ($portPid -notin $processesToStop) {
+                    $processesToStop += $portPid
+                    Print-Message "Blue" "Added port 10001 PID $portPid to stop list"
+                }
+            }
+        }
+    } catch {
+        Print-Message "Yellow" "Error checking port 10001 processes: $_.Exception.Message"
+    }
+    
+    # Stop all processes in our stop list using taskkill (which works on all PIDs)
+    if ($processesToStop.Count -gt 0) {
+        Print-Message "Blue" "Stopping all identified processes: $($processesToStop -join ', ')"
+        # Use stopPid instead of pid to avoid conflict with PowerShell built-in $pid
+        foreach ($stopPid in $processesToStop) {
+            Print-Message "Blue" "Stopping process (PID: $stopPid)..."
+            # Use taskkill which can handle processes from all users
+            taskkill /F /PID $stopPid 2>&1 | Out-Null
+            Print-Message "Blue" "Taskkill result: $LASTEXITCODE"
+        }
+    }
+    
+    # Delete PID file
     Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
     
-    # 验证端口是否已释放
-    Start-Sleep -Seconds 2
-    if (Check-Port $BACKEND_PORT) {
-        Print-Message $RED "✗ 警告: 端口 $BACKEND_PORT 仍被占用"
-        $remainingPids = Get-PidByPort $BACKEND_PORT
-        if ($remainingPids) {
-            Print-Message $YELLOW "占用端口的进程详情:"
-            Get-Process -Id $remainingPids -ErrorAction SilentlyContinue | ForEach-Object {
-                Print-Message $YELLOW "  $($_.Id) $($_.ProcessName)"
-            }
-            Print-Message $YELLOW "提示: 如果这些进程不属于本项目，请手动处理"
+    # Verify all processes are stopped by checking the port
+    Start-Sleep -Seconds 3
+    $portStillInUse = $false
+    try {
+        $netstatOutput = netstat -ano | findstr :10001 | findstr LISTENING 2>&1
+        if ($netstatOutput) {
+            $portStillInUse = $true
+            Print-Message "Yellow" "Port 10001 is still in use: $netstatOutput"
         }
+    } catch {
+        Print-Message "Yellow" "Error checking port 10001: $_.Exception.Message"
+    }
+    
+    if (-not $portStillInUse) {
+        Print-Message "Green" "[OK] Backend service has been stopped completely"
+        return 0
     } else {
-        Print-Message $GREEN "✓ 后端服务已完全停止"
+        Print-Message "Red" "[ERROR] Port 10001 is still in use after stopping processes"
+        return 1
     }
 }
 
-# 重启后端服务
+# Show backend service status
+function Status-Backend {
+    # Load environment variables to get the correct port
+    $PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR)
+    $BACKEND_DIR = Join-Path $PROJECT_ROOT "backend-python"
+    Load-Env (Join-Path $PROJECT_ROOT ".env")
+    Load-Env (Join-Path $BACKEND_DIR ".env")
+    
+    # Set default port - should be backend port, not frontend port!
+    $BACKEND_PORT = $Env:BACKEND_PORT -as [int]
+    if (-not $BACKEND_PORT) {
+        $BACKEND_PORT = 10000
+    }
+    
+    $isRunning, $processId = Is-Running
+    if ($isRunning) {
+        Print-Message "Green" "[OK] Backend service is running (PID: $processId)"
+        
+        # Try to find the actual port the process is listening on
+        $actualPort = $BACKEND_PORT
+        try {
+            # Get all listening ports and find the one matching our process ID
+            $netstatOutput = netstat -ano | findstr LISTENING 2>&1
+            if ($netstatOutput) {
+                foreach ($line in $netstatOutput) {
+                    $lineParts = $line -split '\s+' | Where-Object { $_ -ne '' }
+                    if ($lineParts.Count -ge 5) {
+                        $port = $lineParts[1] -replace '.*:', ''
+                        $listeningPid = $lineParts[4]
+                        if ([int]$listeningPid -eq $processId) {
+                            $actualPort = [int]$port
+                            Write-Host "Found port $actualPort for PID $processId"
+                            break
+                        }
+                    }
+                }
+            }
+        } catch {
+            Write-Host "Error finding port: $_.Exception.Message"
+            # Ignore errors, use default port
+        }
+        
+        Print-Message "Blue" "Access address: http://localhost:$actualPort"
+        
+        # Check service accessibility using actual port
+        Print-Message "Blue" "Checking service accessibility..."
+        if (Is-Service-Accessible $actualPort) {
+            Print-Message "Green" "[OK] Backend service is accessible"
+        } else {
+            Print-Message "Yellow" "[WARN] Backend service process exists but page is inaccessible"
+        }
+        return 0
+    } else {
+        Print-Message "Red" "[ERROR] Backend service is not running"
+        return 1
+    }
+}
+
+# Restart backend service
 function Restart-Backend {
-    Print-Message $BLUE "重启后端服务..."
+    Print-Message "Blue" "Restarting backend service..."
     Stop-Backend
     Start-Sleep -Seconds 3
     Start-Backend
 }
 
-# 显示后端服务状态
-function Status-Backend {
-    $BACKEND_PORT = Set-BackendPort
-    
-    if (Is-Running) {
-        $pid = Get-Content $PID_FILE
-        Print-Message $GREEN "✓ 后端服务正在运行 (PID: $pid)"
-        Print-Message $BLUE "API地址: http://localhost:$BACKEND_PORT"
-        
-        # 检查健康状态
-        if (Get-Command curl -ErrorAction SilentlyContinue) {
-            Print-Message $BLUE "检查服务可访问性..."
-            try {
-                curl -s "http://localhost:$BACKEND_PORT/health" | Out-Null
-                Print-Message $GREEN "✓ 后端服务健康"
-            } catch {
-                Print-Message $YELLOW "⚠ 后端服务进程存在但API不可访问"
-            }
-        }
-    } else {
-        # 若无PID但端口有监听，提示服务可能在运行
-        if (Check-Port $BACKEND_PORT) {
-            Print-Message $YELLOW "⚠ 未发现PID文件，但检测到端口 $BACKEND_PORT 有服务在运行"
-            Print-Message $BLUE "API地址: http://localhost:$BACKEND_PORT"
-        } else {
-            Print-Message $RED "✗ 后端服务未运行"
-        }
-    }
-}
-
-# 显示后端服务日志
+# Show backend service logs
 function Show-Logs {
     if (Test-Path $LOG_FILE) {
-        Print-Message $BLUE "后端服务日志 (最后50行):"
+        Print-Message "Blue" "Backend service logs (last 50 lines):"
         Get-Content $LOG_FILE -Tail 50
     } else {
-        Print-Message $YELLOW "日志文件不存在: $LOG_FILE"
+        Print-Message "Yellow" "Log file does not exist: $LOG_FILE"
     }
 }
 
-# 运行后端测试
-function Run-Tests {
-    Print-Message $BLUE "运行后端测试..."
-    
-    # 确保在后端目录
-    Set-Location $BACKEND_DIR
-    
-    # 检查是否有测试脚本
-    if (Test-Path "requirements.txt") -or (Test-Path "pyproject.toml") {
-        if (python -m pytest --version 2>$null) {
-            python -m pytest
-        } else {
-            Print-Message $YELLOW "未找到测试工具 pytest，尝试安装..."
-            pip install pytest
-            if ($LASTEXITCODE -eq 0) {
-                python -m pytest
-            } else {
-                Print-Message $RED "安装 pytest 失败，无法运行测试"
-            }
-        }
-    } else {
-        Print-Message $YELLOW "未找到测试脚本或配置文件"
-    }
-}
-
-# 显示帮助信息
+# Show help information
 function Show-Help {
-    Write-Host "后端Python服务管理脚本"
     Write-Host ""
-    Write-Host "使用方法: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|logs|test}"
+    Write-Host "Usage: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|logs}"
     Write-Host ""
-    Write-Host "命令说明:"
-    Write-Host "  start     - 启动后端服务"
-    Write-Host "  stop      - 停止后端服务"
-    Write-Host "  restart   - 重启后端服务"
-    Write-Host "  status    - 查看后端服务状态"
-    Write-Host "  logs      - 查看后端服务日志"
-    Write-Host "  test      - 运行后端测试"
-    Write-Host "  help      - 显示帮助信息"
-    Write-Host ""
-    $BACKEND_PORT = Set-BackendPort
-    Write-Host "API地址: http://localhost:$BACKEND_PORT"
+    Write-Host "Commands:"
+    Write-Host "  start   - Start backend service"
+    Write-Host "  stop    - Stop backend service"
+    Write-Host "  restart - Restart backend service"
+    Write-Host "  status  - Check backend service status"
+    Write-Host "  logs    - View backend service logs"
+    Write-Host "  help    - Show help information"
 }
 
-# 主函数
+# Execute different operations based on command
+$exitCode = 0
 switch ($cmd) {
     "start" {
-        Start-Backend
+        $exitCode = Start-Backend
     }
     "stop" {
-        Stop-Backend
+        $exitCode = Stop-Backend
     }
     "restart" {
         Restart-Backend
+        $exitCode = $LASTEXITCODE
     }
     "status" {
-        Status-Backend
+        $exitCode = Status-Backend
     }
     "logs" {
         Show-Logs
-    }
-    "test" {
-        Run-Tests
+        $exitCode = 0
     }
     "help" {
         Show-Help
+        $exitCode = 0
     }
     default {
-        Print-Message $RED "错误: 未知命令 '$cmd'"
-        Write-Host ""
+        Print-Message "Red" "Error: Unknown command $cmd"
         Show-Help
+        $exitCode = 1
     }
 }
+
+# Ensure script returns correct exit code
+exit $exitCode

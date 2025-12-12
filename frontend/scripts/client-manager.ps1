@@ -1,22 +1,9 @@
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Gabriel Xia(加百列)
+﻿# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Gabriel Xia
 Param([string]$cmd = "help")
 
-# 定义颜色常量
-$RED = "\u001b[0;31m"
-$GREEN = "\u001b[0;32m"
-$YELLOW = "\u001b[1;33m"
-$BLUE = "\u001b[0;34m"
-$NC = "\u001b[0m" # No Color
-
-# 打印带颜色的消息
-function Print-Message {
-    param(
-        [string]$Color,
-        [string]$Message
-    )
-    Write-Host -ForegroundColor $Color "$Message"
-}
+Write-Host "Frontend Service Manager"
+Write-Host "Command: $cmd"
 
 # 脚本路径和项目根目录
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -33,30 +20,36 @@ function Ensure-LogDir {
     }
 }
 
+# 检查前端服务是否运行
+function Is-Running {
+    if (Test-Path $PID_FILE) {
+        $processId = Get-Content $PID_FILE
+        try {
+            $process = Get-Process -Id $processId -ErrorAction Stop
+            return $true, $processId
+        } catch {
+            Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
+            return $false, 0
+        }
+    }
+    return $false, 0
+}
+
 # 加载环境变量
 function Load-Env {
-    # 加载项目根目录的环境变量
-    if (Test-Path (Join-Path $PROJECT_ROOT ".env")) {
-        Get-Content (Join-Path $PROJECT_ROOT ".env") | ForEach-Object {
+    param(
+        [string]$EnvFile
+    )
+    if (Test-Path $EnvFile) {
+        Get-Content $EnvFile | ForEach-Object {
             $line = $_.Trim()
             # 跳过注释行和空行
             if ($line.StartsWith('#') -or [string]::IsNullOrWhiteSpace($line)) {
                 return
             }
-            # 导出有效的环境变量
-            if ($line -match '^[A-Za-z_][A-Za-z0-9_]*=') {
-                $k, $v = $line -split '=', 2
-                Set-Item -Path Env:$k -Value $v
-            }
-        }
-    }
-
-    # 加载前端特定的环境变量
-    if (Test-Path (Join-Path $FRONTEND_DIR ".env")) {
-        Get-Content (Join-Path $FRONTEND_DIR ".env") | ForEach-Object {
-            $line = $_.Trim()
-            # 跳过注释行和空行
-            if ($line.StartsWith('#') -or [string]::IsNullOrWhiteSpace($line)) {
+            # 跳过只包含空格和注释的行
+            $strippedLine = $line -replace '\s+', ''
+            if ($strippedLine.StartsWith('#') -or [string]::IsNullOrWhiteSpace($strippedLine)) {
                 return
             }
             # 导出有效的环境变量
@@ -68,386 +61,355 @@ function Load-Env {
     }
 }
 
-# 设置默认端口和端口范围
-function Set-FrontendPort {
+# 打印带颜色的消息
+function Print-Message {
+    param(
+        [string]$Color,
+        [string]$Message
+    )
+    # 简化颜色输出，避免编码问题
+    switch ($Color) {
+        "Red" {
+            Write-Host -ForegroundColor Red "$Message"
+        }
+        "Green" {
+            Write-Host -ForegroundColor Green "$Message"
+        }
+        "Yellow" {
+            Write-Host -ForegroundColor Yellow "$Message"
+        }
+        "Blue" {
+            Write-Host -ForegroundColor Blue "$Message"
+        }
+        default {
+            Write-Host "$Message"
+        }
+    }
+}
+
+# 检查服务是否可访问
+function Is-Service-Accessible {
+    param(
+        [int]$Port
+    )
+    try {
+        # 使用netstat检查端口是否正在监听
+        $netstatOutput = netstat -ano | findstr :$Port | findstr LISTENING 2>&1
+        if ($netstatOutput) {
+            return $true
+        } else {
+            return $false
+        }
+    } catch {
+        return $false
+    }
+}
+
+# 启动前端服务
+function Start-Frontend {
+    # 加载环境变量
+    Load-Env (Join-Path $PROJECT_ROOT ".env")
+    Load-Env (Join-Path $FRONTEND_DIR ".env")
+    
+    # 设置默认端口和端口范围
     # 缺省前端端口号是10100，允许的动态范围是10100-10199
     $FRONTEND_DEFAULT_PORT = 10100
     $FRONTEND_PORT_RANGE = "10100-10199"
-
+    
     # 从.env文件读取端口配置
-    if (Test-Path (Join-Path $PROJECT_ROOT ".env")) {
-        $envContent = Get-Content (Join-Path $PROJECT_ROOT ".env")
-        
-        # 读取FRONTEND_PORT
-        $frontendPortLine = $envContent | Where-Object { $_ -match '^[\s]*FRONTEND_PORT=' }
-        if ($frontendPortLine) {
-            $FRONTEND_PORT = $frontendPortLine -replace '^[\s]*FRONTEND_PORT=', '' -replace '\s+$', ''
-        } else {
-            $FRONTEND_PORT = $FRONTEND_DEFAULT_PORT
-        }
-        
-        # 读取FRONTEND_PORT_RANGE
-        $frontendPortRangeLine = $envContent | Where-Object { $_ -match '^[\s]*FRONTEND_PORT_RANGE=' }
-        if ($frontendPortRangeLine) {
-            $FRONTEND_PORT_RANGE = $frontendPortRangeLine -replace '^[\s]*FRONTEND_PORT_RANGE=', '' -replace '\s+$', ''
-        }
-    } else {
+    $FRONTEND_PORT = $Env:FRONTEND_PORT -as [int]
+    if (-not $FRONTEND_PORT) {
         $FRONTEND_PORT = $FRONTEND_DEFAULT_PORT
     }
-
+    
     # 提取端口范围的起始和结束值
-    $FRONTEND_PORT_START, $FRONTEND_PORT_END = $FRONTEND_PORT_RANGE -split '-'
-
+    $rangeParts = $FRONTEND_PORT_RANGE -split "-"
+    $FRONTEND_PORT_START = [int]$rangeParts[0]
+    $FRONTEND_PORT_END = [int]$rangeParts[1]
+    
     # 检查端口是否被占用的函数
-    function Is-PortOccupied {
-        param([int]$Port)
-        $inUse = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-        return $inUse -ne $null
-    }
-
-    # 检查端口是否为本应用占用的函数
-    function Is-AppPort {
-        param([int]$Port)
-        $result = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-        if ($result) {
-            $pid = $result.Line.Trim() -split '\s+' | Select-Object -Last 1
-            if ($pid -and (Get-Process -Id $pid -ErrorAction SilentlyContinue)) {
-                $process = Get-Process -Id $pid
-                if ($process.Path -like "*node.exe" -or $process.Path -like "*npm*" -or $process.Path -like "*yarn*" -or $process.Path -like "*pnpm*") {
-                    $cmdLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $pid").CommandLine
-                    if ($cmdLine -match "$FRONTEND_DIR" -or $cmdLine -match "vite" -or $cmdLine -match "$Port") {
-                        return $true
-                    }
-                }
+    function Is-Port-Occupied {
+        param(
+            [int]$port
+        )
+        try {
+            $netstatOutput = netstat -ano | findstr :$port 2>&1
+            if ($netstatOutput -and $netstatOutput -match "LISTENING") {
+                return $true
             }
+        } catch {
+            # 忽略错误
         }
         return $false
     }
-
+    
     # 查找可用端口的函数
-    function Find-AvailablePort {
-        param([int]$Start, [int]$End, [int]$Current)
+    function Find-Available-Port {
+        param(
+            [int]$start,
+            [int]$end,
+            [int]$current
+        )
         
-        # 先检查当前端口是否可用或为本应用占用
-        if (-not (Is-PortOccupied $Current) -or (Is-AppPort $Current)) {
-            return $Current
+        # 先检查当前端口是否可用
+        if (-not (Is-Port-Occupied $current)) {
+            return $current
         }
         
         # 从当前端口开始查找可用端口
-        for ($port = $Current; $port -le $End; $port++) {
-            if (-not (Is-PortOccupied $port)) {
+        for ($port = $current; $port -le $end; $port++) {
+            if (-not (Is-Port-Occupied $port)) {
                 return $port
             }
         }
         
         # 如果从当前端口到结束都没有可用端口，从起始端口到当前端口前一个查找
-        for ($port = $Start; $port -lt $Current; $port++) {
-            if (-not (Is-PortOccupied $port)) {
+        for ($port = $start; $port -lt $current; $port++) {
+            if (-not (Is-Port-Occupied $port)) {
                 return $port
             }
         }
         
         # 没有可用端口
-        return $null
-    }
-
-    # 确保端口可用
-    $availablePort = Find-AvailablePort $FRONTEND_PORT_START $FRONTEND_PORT_END $FRONTEND_PORT
-    if (-not $availablePort) {
-        Print-Message $RED "错误: 无法在端口范围 $FRONTEND_PORT_RANGE 内找到可用端口"
-        exit 1
-    }
-
-    $Env:FRONTEND_PORT = $availablePort
-    $Env:PORT = $availablePort
-    return $availablePort
-}
-
-# 检查前端服务是否运行
-function Is-Running {
-    if (Test-Path $PID_FILE) {
-        $pid = Get-Content $PID_FILE
-        if (Get-Process -Id $pid -ErrorAction SilentlyContinue) {
-            return $true
-        } else {
-            Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
-            return $false
-        }
-    }
-    return $false
-}
-
-# 检查端口是否被占用
-function Check-Port {
-    param([int]$Port)
-    $inUse = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-    return $inUse -ne $null
-}
-
-# 获取占用指定端口的进程ID
-function Get-PidByPort {
-    param([int]$Port)
-    $result = netstat -ano | Select-String ":$Port " | Where-Object { $_.Line -match 'LISTENING' }
-    if ($result) {
-        $parts = $result.Line.Trim() -split '\s+'
-        return $parts[-1]
-    }
     return $null
 }
 
-# 启动前端服务
-function Start-Frontend {
-    if (Is-Running) {
-        $pid = Get-Content $PID_FILE
-        Print-Message $YELLOW "前端服务已在运行中 (PID: $pid)"
-        return
+    # 确保端口可用
+    $availablePort = Find-Available-Port $FRONTEND_PORT_START $FRONTEND_PORT_END $FRONTEND_PORT
+    if ($availablePort -eq $null) {
+        Print-Message "Red" "错误: 无法在端口范围 $FRONTEND_PORT_RANGE 内找到可用端口"
+        return 1
     }
+    $FRONTEND_PORT = $availablePort
     
-    $FRONTEND_PORT = Set-FrontendPort
-    
-    # 检查端口是否被占用
-    if (Check-Port $FRONTEND_PORT) {
-        Print-Message $RED "错误: 端口 $FRONTEND_PORT 已被占用"
-        Print-Message $YELLOW "请使用以下命令查看占用进程: netstat -ano | findstr :$FRONTEND_PORT"
-        return
-    }
-    
-    Print-Message $BLUE "启动前端服务..."
-    
-    # 确保在前端目录
-    Set-Location $FRONTEND_DIR
-    
-    # 检查依赖
-    if (-not (Test-Path (Join-Path $FRONTEND_DIR "node_modules"))) {
-        Print-Message $YELLOW "安装前端依赖..."
-        if (Get-Command pnpm -ErrorAction SilentlyContinue) {
-            pnpm install
-            if ($LASTEXITCODE -ne 0) {
-                Print-Message $RED "错误: 前端依赖安装失败"
-                return
-            }
-        } else {
-            npm install
-            if ($LASTEXITCODE -ne 0) {
-                Print-Message $RED "错误: 前端依赖安装失败"
-                return
-            }
-        }
+    # 检查服务是否已运行
+    $isRunning, $runningProcessId = Is-Running
+    if ($isRunning) {
+        Print-Message "Yellow" "Frontend service is already running (PID: $runningProcessId)"
+        return 0
     }
     
     Ensure-LogDir
     
-    # 启动前端开发服务器
-    Print-Message $BLUE "DEBUG: 计划使用端口 FRONTEND_PORT=$FRONTEND_PORT, PORT=$Env:PORT"
+    Print-Message "Blue" "Starting frontend service..."
+    Print-Message "Blue" "Using port: $FRONTEND_PORT"
     
-    $startArgs = @(
-        "run", "dev", "--", 
-        "--port", "$FRONTEND_PORT", 
-        "--strictPort"
-    )
-    
+    # 生成启动命令
+    $envCmd = "`$env:FRONTEND_PORT=$FRONTEND_PORT; `$env:PORT=$FRONTEND_PORT"
+    $startCmd = ""
     if (Get-Command pnpm -ErrorAction SilentlyContinue) {
-        $process = Start-Process -FilePath pnpm -ArgumentList $startArgs -WorkingDirectory $FRONTEND_DIR -PassThru -RedirectStandardOutput $LOG_FILE -RedirectStandardError $LOG_FILE -WindowStyle Hidden
+        $startCmd = "pnpm run dev --port $FRONTEND_PORT --strictPort"
+    } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
+        $startCmd = "npm run dev -- --port $FRONTEND_PORT --strictPort"
     } else {
-        $process = Start-Process -FilePath npm -ArgumentList $startArgs -WorkingDirectory $FRONTEND_DIR -PassThru -RedirectStandardOutput $LOG_FILE -RedirectStandardError $LOG_FILE -WindowStyle Hidden
+        Print-Message "Red" "[ERROR] Neither pnpm nor npm found in PATH"
+        return 1
     }
     
-    # 保存PID
-    $process.Id | Set-Content $PID_FILE
+    # 直接使用Start-Process启动node服务，这是最可靠的方式
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = "powershell.exe"
+    $startInfo.Arguments = "-NoProfile -WindowStyle Hidden -Command $envCmd; cd '$FRONTEND_DIR'; $startCmd 2>&1 | Out-File '$LOG_FILE' -Append"
+    $startInfo.WorkingDirectory = $FRONTEND_DIR
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $process.Start() | Out-Null
+    
+    # 获取PowerShell进程ID
+    $psProcessId = $process.Id
     
     # 等待服务启动
-    Start-Sleep -Seconds 5
+    Print-Message "Blue" "Waiting for service to start..."
+    Start-Sleep -Seconds 10
     
-    if (Is-Running) {
-        Print-Message $GREEN "✓ 前端服务启动成功 (PID: $($process.Id))"
-        Print-Message $BLUE "访问地址: http://localhost:$FRONTEND_PORT"
-        Print-Message $BLUE "实际使用的端口: $FRONTEND_PORT"
-        
-        # 检查服务是否可访问
-        if (Get-Command curl -ErrorAction SilentlyContinue) {
-            Start-Sleep -Seconds 3
-            Print-Message $BLUE "检查服务可访问性..."
-            try {
-                curl -s "http://localhost:$FRONTEND_PORT" | Out-Null
-                Print-Message $GREEN "✓ 前端服务可正常访问"
-            } catch {
-                Print-Message $YELLOW "⚠ 前端服务启动但暂时无法访问"
-                Print-Message $YELLOW "可能的原因: 服务仍在启动中，或端口 $FRONTEND_PORT 未正确响应"
+    # 查找子进程中的node进程
+    $nodeProcessId = 0
+    
+    # 首先尝试直接通过端口查找PID，这是最可靠的方法
+    try {
+        # 使用netstat查找端口对应的PID
+        $netstatOutput = netstat -ano | findstr :$FRONTEND_PORT 2>&1
+        if ($netstatOutput) {
+            # 从netstat输出中提取PID
+            $netstatOutput | ForEach-Object {
+                if ($_ -match "LISTENING\s+(\d+)") {
+                    $nodeProcessId = $matches[1]
+                }
             }
-        } else {
-            Print-Message $YELLOW "⚠ 无法检查服务可访问性 (curl 命令不可用)"
         }
+    } catch {
+        # 忽略错误，继续尝试其他方法
+    }
+    
+    # 如果端口查找失败，尝试通过WMIC查找子进程
+    if (-not $nodeProcessId) {
+        try {
+            $wmicOutput = wmic process where (ParentProcessId=$psProcessId) get ProcessId, CommandLine /format:list 2>&1
+            $nodeProcessId = $wmicOutput | Where-Object { $_ -match "node" } | ForEach-Object {
+                if ($_ -match "ProcessId=(\d+)") {
+                    return $matches[1]
+                }
+            }
+        } catch {
+            # 忽略错误，继续执行
+        }
+    }
+    
+    # 如果WMIC失败，尝试另一种方法
+    if (-not $nodeProcessId) {
+        try {
+            $nodeProcessId = Get-WmiObject Win32_Process | Where-Object {
+                $_.ParentProcessId -eq $psProcessId -and $_.CommandLine -match "node"
+            } | Select-Object -ExpandProperty ProcessId
+        } catch {
+            # 忽略错误，继续执行
+        }
+    }
+    
+    # 如果找到node进程，保存PID
+    if ($nodeProcessId) {
+        $nodeProcessId | Set-Content $PID_FILE -Force
+        
+        Print-Message "Green" "[OK] Frontend service started successfully (PID: $nodeProcessId)"
+        Print-Message "Blue" "Access address: http://localhost:$FRONTEND_PORT"
+        
+        # 检查服务可访问性
+        Print-Message "Blue" "Checking service accessibility..."
+        Start-Sleep -Seconds 5
+        if (Is-Service-Accessible $FRONTEND_PORT) {
+            Print-Message "Green" "[OK] Frontend service is accessible"
+        } else {
+            Print-Message "Yellow" "[WARN] Frontend service started but temporarily inaccessible"
+        }
+        return 0
     } else {
-        Print-Message $RED "✗ 前端服务启动失败"
-        Print-Message $YELLOW "请查看日志: $LOG_FILE"
+        Print-Message "Red" "[ERROR] Failed to start frontend service"
+        Print-Message "Yellow" "Please check logs: $LOG_FILE"
+        return 1
     }
 }
 
 # 停止前端服务
 function Stop-Frontend {
-    $FRONTEND_PORT = Set-FrontendPort
-    
-    if (-not (Is-Running)) {
-        # 即使没有PID文件，也尝试根据端口清理残留进程
-        if (Check-Port $FRONTEND_PORT) {
-            Print-Message $YELLOW "检测到端口 $FRONTEND_PORT 有进程监听，尝试清理..."
-            $portPid = Get-PidByPort $FRONTEND_PORT
-            if ($portPid) {
-                Print-Message $YELLOW "清理残留的端口监听进程..."
-                Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
-            }
-            Start-Sleep -Seconds 2
-            if (Check-Port $FRONTEND_PORT) {
-                Print-Message $RED "✗ 警告: 端口 $FRONTEND_PORT 仍被占用"
-                $remainingPids = Get-PidByPort $FRONTEND_PORT
-                if ($remainingPids) {
-                    Print-Message $YELLOW "占用端口的进程: $remainingPids"
-                }
-                return
-            } else {
-                Print-Message $GREEN "✓ 已清理端口占用，前端服务未运行"
-                return
-            }
-        }
-        Print-Message $YELLOW "前端服务未运行"
-        return
+    $isRunning, $processId = Is-Running
+    if (-not $isRunning) {
+        Print-Message "Yellow" "Frontend service is not running"
+        return 0
     }
     
-    $pid = Get-Content $PID_FILE
-    Print-Message $BLUE "停止前端服务 (PID: $pid)..."
+    Print-Message "Blue" "Stopping frontend service (PID: $processId)..."
     
-    # 尝试优雅停止主进程
-    Stop-Process -Id $pid -ErrorAction SilentlyContinue
-    
-    # 等待进程结束
-    $count = 0
-    while (Get-Process -Id $pid -ErrorAction SilentlyContinue -and $count -lt 15) {
-        Start-Sleep -Seconds 1
-        $count++
+    try {
+        $process = Get-Process -Id $processId -ErrorAction Stop
+        $process.Kill()
+        $process.WaitForExit()
+    } catch {
+        Print-Message "Red" "Error stopping process: $_.Exception.Message"
     }
     
-    # 如果主进程仍在运行，强制杀死
-    if (Get-Process -Id $pid -ErrorAction SilentlyContinue) {
-        Print-Message $YELLOW "强制停止主进程..."
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-    }
-    
-    # 清理端口占用
-    $portPid = Get-PidByPort $FRONTEND_PORT
-    if ($portPid) {
-        Print-Message $YELLOW "清理本项目的端口监听进程..."
-        Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
-    }
-    
+    # 删除PID文件
     Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
     
-    # 验证端口是否已释放
-    Start-Sleep -Seconds 2
-    if (Check-Port $FRONTEND_PORT) {
-        Print-Message $RED "✗ 警告: 端口 $FRONTEND_PORT 仍被占用"
-        $remainingPids = Get-PidByPort $FRONTEND_PORT
-        if ($remainingPids) {
-            Print-Message $YELLOW "占用端口的进程详情:"
-            Get-Process -Id $remainingPids -ErrorAction SilentlyContinue | ForEach-Object {
-                Print-Message $YELLOW "  $($_.Id) $($_.ProcessName)"
-            }
-            Print-Message $YELLOW "提示: 如果这些进程不属于本项目，请手动处理"
+    Print-Message "Green" "[OK] Frontend service has been stopped"
+    return 0
+}
+
+# 显示前端服务状态
+function Status-Frontend {
+    # 加载环境变量以获取正确的端口
+    Load-Env (Join-Path $PROJECT_ROOT ".env")
+    Load-Env (Join-Path $FRONTEND_DIR ".env")
+    
+    # 设置默认端口
+    $FRONTEND_PORT = $Env:FRONTEND_PORT -as [int]
+    if (-not $FRONTEND_PORT) {
+        $FRONTEND_PORT = 10100
+    }
+    
+    $isRunning, $processId = Is-Running
+    if ($isRunning) {
+        Print-Message "Green" "[OK] Frontend service is running (PID: $processId)"
+        Print-Message "Blue" "Access address: http://localhost:$FRONTEND_PORT"
+        
+        # 检查服务可访问性
+        Print-Message "Blue" "Checking service accessibility..."
+        if (Is-Service-Accessible $FRONTEND_PORT) {
+            Print-Message "Green" "[OK] Frontend service is accessible"
+        } else {
+            Print-Message "Yellow" "[WARN] Frontend service process exists but page is inaccessible"
         }
+        return 0
     } else {
-        Print-Message $GREEN "✓ 前端服务已完全停止"
+        Print-Message "Red" "[ERROR] Frontend service is not running"
+        return 1
     }
 }
 
 # 重启前端服务
 function Restart-Frontend {
-    Print-Message $BLUE "重启前端服务..."
+    Print-Message "Blue" "Restarting frontend service..."
     Stop-Frontend
     Start-Sleep -Seconds 3
-    Start-Frontend
-}
-
-# 显示前端服务状态
-function Status-Frontend {
-    $FRONTEND_PORT = Set-FrontendPort
-    
-    if (Is-Running) {
-        $pid = Get-Content $PID_FILE
-        Print-Message $GREEN "✓ 前端服务正在运行 (PID: $pid)"
-        Print-Message $BLUE "访问地址: http://localhost:$FRONTEND_PORT"
-        Print-Message $BLUE "实际使用的端口: $FRONTEND_PORT"
-        
-        # 检查服务是否可访问
-        if (Get-Command curl -ErrorAction SilentlyContinue) {
-            Print-Message $BLUE "检查服务可访问性..."
-            try {
-                curl -s "http://localhost:$FRONTEND_PORT" | Out-Null
-                Print-Message $GREEN "✓ 前端服务可正常访问"
-            } catch {
-                Print-Message $YELLOW "⚠ 前端服务进程存在但页面不可访问"
-            }
-        }
-    } else {
-        # 若无PID但端口有监听，提示服务可能在运行
-        if (Check-Port $FRONTEND_PORT) {
-            Print-Message $YELLOW "⚠ 未发现PID文件，但检测到端口 $FRONTEND_PORT 有服务在运行"
-            Print-Message $BLUE "访问地址: http://localhost:$FRONTEND_PORT"
-        } else {
-            Print-Message $RED "✗ 前端服务未运行"
-        }
-    }
+    return Start-Frontend
 }
 
 # 显示前端服务日志
 function Show-Logs {
     if (Test-Path $LOG_FILE) {
-        Print-Message $BLUE "前端服务日志 (最后50行):"
+        Print-Message "Blue" "Frontend service logs (last 50 lines):"
         Get-Content $LOG_FILE -Tail 50
     } else {
-        Print-Message $YELLOW "日志文件不存在: $LOG_FILE"
+        Print-Message "Yellow" "Log file does not exist: $LOG_FILE"
     }
 }
 
 # 显示帮助信息
 function Show-Help {
-    Write-Host "前端服务管理脚本"
     Write-Host ""
-    Write-Host "使用方法: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|logs}"
+    Write-Host "Usage: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|logs}"
     Write-Host ""
-    Write-Host "命令说明:"
-    Write-Host "  start   - 启动前端服务"
-    Write-Host "  stop    - 停止前端服务"
-    Write-Host "  restart - 重启前端服务"
-    Write-Host "  status  - 查看前端服务状态"
-    Write-Host "  logs    - 查看前端服务日志"
-    Write-Host "  help    - 显示帮助信息"
-    Write-Host ""
-    $FRONTEND_PORT = Set-FrontendPort
-    Write-Host "访问地址: http://localhost:$FRONTEND_PORT"
+    Write-Host "Commands:"
+    Write-Host "  start   - Start frontend service"
+    Write-Host "  stop    - Stop frontend service"
+    Write-Host "  restart - Restart frontend service"
+    Write-Host "  status  - Check frontend service status"
+    Write-Host "  logs    - View frontend service logs"
+    Write-Host "  help    - Show help information"
 }
 
-# 主函数
+# 根据命令执行不同操作
+$exitCode = 0
 switch ($cmd) {
     "start" {
-        Start-Frontend
+        $exitCode = Start-Frontend
     }
     "stop" {
-        Stop-Frontend
+        $exitCode = Stop-Frontend
     }
     "restart" {
         Restart-Frontend
+        $exitCode = $LASTEXITCODE
     }
     "status" {
-        Status-Frontend
+        $exitCode = Status-Frontend
     }
     "logs" {
         Show-Logs
+        $exitCode = 0
     }
     "help" {
         Show-Help
+        $exitCode = 0
     }
     default {
-        Print-Message $RED "错误: 未知命令 '$cmd'"
-        Write-Host ""
+        Print-Message "Red" "Error: Unknown command $cmd"
         Show-Help
+        $exitCode = 1
     }
 }
+
+# 确保脚本返回正确的退出码
+exit $exitCode

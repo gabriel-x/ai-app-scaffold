@@ -1,280 +1,342 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Gabriel Xia(加百列)
+# Copyright (c) 2025 Gabriel Xia
 Param([string]$cmd = "help")
 
-# 定义颜色常量
-$RED = "\u001b[0;31m"
-$GREEN = "\u001b[0;32m"
-$YELLOW = "\u001b[1;33m"
-$BLUE = "\u001b[0;34m"
-$NC = "\u001b[0m" # No Color
+# Script paths and project root
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ROOT = Split-Path -Parent $SCRIPT_DIR
 
-# 打印带颜色的消息
+# Module directories
+$FE_DIR = Join-Path $ROOT "frontend"
+$NODE_DIR = Join-Path $ROOT "backend-node"
+$PY_DIR = Join-Path $ROOT "backend-python"
+
+# PID file locations (consistent with module scripts)
+$FE_PID_FILE = Join-Path $ROOT ".frontend.pid"
+$NODE_PID_FILE = Join-Path $ROOT ".node.pid"
+$PY_PID_FILE = Join-Path $ROOT ".python.pid"
+
+# Management script paths for each module
+$FE_SCRIPT = Join-Path $FE_DIR "scripts\client-manager.ps1"
+$NODE_SCRIPT = Join-Path $NODE_DIR "scripts\server-manager.ps1"
+$PY_SCRIPT = Join-Path $PY_DIR "scripts\server-manager.ps1"
+
+# Check if service is running
+function Is-Running {
+    param([string]$PidFile)
+    if (Test-Path $PidFile) {
+        $processId = Get-Content $PidFile
+        try {
+            Get-Process -Id $processId -ErrorAction Stop | Out-Null
+            return $true, $processId
+        } catch {
+            Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+            return $false, 0
+        }
+    }
+    return $false, 0
+}
+
+# Print banner
+function Print-Banner {
+    param([string]$Message)
+    Write-Host "======================================"
+    Write-Host "$Message"
+    Write-Host "======================================"
+}
+
+# Print colored message
 function Print-Message {
     param(
         [string]$Color,
         [string]$Message
     )
-    Write-Host -ForegroundColor $Color "$Message"
-}
-
-# 显示横幅
-function Print-Banner {
-    param([string]$Message)
-    Print-Message $BLUE "======================================"
-    Print-Message $BLUE "$Message"
-    Print-Message $BLUE "======================================"
-}
-
-# 脚本路径和项目根目录
-$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ROOT = Split-Path -Parent $SCRIPT_DIR
-
-# 模块目录
-$FE_DIR = Join-Path $ROOT "frontend"
-$NODE_DIR = Join-Path $ROOT "backend-node"
-$PY_DIR = Join-Path $ROOT "backend-python"
-
-# 各模块的管理脚本路径
-$FE_SCRIPT = Join-Path $FE_DIR "scripts\client-manager.ps1"
-$NODE_SCRIPT = Join-Path $NODE_DIR "scripts\server-manager.ps1"
-$PY_SCRIPT = Join-Path $PY_DIR "scripts\server-manager.ps1"
-
-# 检查服务是否运行
-function Is-Running {
-    param([string]$PidFile)
-    if (Test-Path $PidFile) {
-        $pid = Get-Content $PidFile
-        try {
-            Get-Process -Id $pid | Out-Null
-            return $true
-        } catch {
-            Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-            return $false
+    switch ($Color) {
+        "Red" {
+            Write-Host -ForegroundColor Red "$Message"
+        }
+        "Green" {
+            Write-Host -ForegroundColor Green "$Message"
+        }
+        "Yellow" {
+            Write-Host -ForegroundColor Yellow "$Message"
+        }
+        "Blue" {
+            Write-Host -ForegroundColor Blue "$Message"
+        }
+        default {
+            Write-Host "$Message"
         }
     }
-    return $false
 }
 
-# 启动前端服务
+# Execute script with error handling
+function Execute-Script {
+    param(
+        [string]$ScriptPath,
+        [string]$Command,
+        [string]$ServiceName
+    )
+    
+    Print-Message "Blue" "Executing $Command for $ServiceName..."
+    
+    # Reset console before executing child script
+    [Console]::ResetColor()
+    
+    # Execute the script directly without output capturing which causes display issues
+    & $ScriptPath $Command
+    $exitCode = $LASTEXITCODE
+    
+    # Reset console again after script execution
+    [Console]::ResetColor()
+    
+    if ($exitCode -eq 0) {
+        Print-Message "Green" "$Command for $ServiceName completed successfully"
+    } else {
+        Print-Message "Red" "$Command for $ServiceName failed with exit code $exitCode"
+    }
+    
+    # Ensure proper line termination
+    Write-Host ""
+    
+    return $exitCode
+}
+
+# Start frontend service
 function Start-Frontend {
-    Print-Message $BLUE "启动前端服务..."
-    & $FE_SCRIPT start
-    return $LASTEXITCODE
+    $isRunning, $processId = Is-Running $FE_PID_FILE
+    if ($isRunning) {
+        Print-Message "Yellow" "Frontend service is already running (PID: $processId)"
+        return 0
+    }
+    
+    return Execute-Script -ScriptPath $FE_SCRIPT -Command "start" -ServiceName "Frontend"
 }
 
-# 停止前端服务
+# Stop frontend service
 function Stop-Frontend {
-    Print-Message $BLUE "停止前端服务..."
-    & $FE_SCRIPT stop
-    return $LASTEXITCODE
+    return Execute-Script -ScriptPath $FE_SCRIPT -Command "stop" -ServiceName "Frontend"
 }
 
-# 查看前端服务状态
+# Check frontend service status
 function Status-Frontend {
-    Print-Message $BLUE "前端服务状态:"
-    & $FE_SCRIPT status
-    return $LASTEXITCODE
+    Print-Banner "Frontend Service Status"
+    return Execute-Script -ScriptPath $FE_SCRIPT -Command "status" -ServiceName "Frontend"
 }
 
-# 重启前端服务
+# Restart frontend service
 function Restart-Frontend {
-    Print-Message $BLUE "重启前端服务..."
+    Print-Banner "Restart Frontend Service"
     Stop-Frontend
     Start-Sleep -Seconds 3
-    Start-Frontend
-    return $LASTEXITCODE
+    return Start-Frontend
 }
 
-# 启动后端Node服务
+# Start backend Node service
 function Start-Node {
-    Print-Message $BLUE "启动后端Node服务..."
-    & $NODE_SCRIPT start
-    return $LASTEXITCODE
+    $isRunning, $processId = Is-Running $NODE_PID_FILE
+    if ($isRunning) {
+        Print-Message "Yellow" "Backend Node service is already running (PID: $processId)"
+        return 0
+    }
+    
+    return Execute-Script -ScriptPath $NODE_SCRIPT -Command "start" -ServiceName "Backend Node"
 }
 
-# 停止后端Node服务
+# Stop backend Node service
 function Stop-Node {
-    Print-Message $BLUE "停止后端Node服务..."
-    & $NODE_SCRIPT stop
-    return $LASTEXITCODE
+    return Execute-Script -ScriptPath $NODE_SCRIPT -Command "stop" -ServiceName "Backend Node"
 }
 
-# 查看后端Node服务状态
+# Check backend Node service status
 function Status-Node {
-    Print-Message $BLUE "后端Node服务状态:"
-    & $NODE_SCRIPT status
-    return $LASTEXITCODE
+    Print-Banner "Backend Node Service Status"
+    return Execute-Script -ScriptPath $NODE_SCRIPT -Command "status" -ServiceName "Backend Node"
 }
 
-# 重启后端Node服务
+# Restart backend Node service
 function Restart-Node {
-    Print-Message $BLUE "重启后端Node服务..."
+    Print-Banner "Restart Backend Node Service"
     Stop-Node
     Start-Sleep -Seconds 3
-    Start-Node
-    return $LASTEXITCODE
+    return Start-Node
 }
 
-# 启动后端Python服务
+# Start backend Python service
 function Start-Python {
-    Print-Message $BLUE "启动后端Python服务..."
-    & $PY_SCRIPT start
-    return $LASTEXITCODE
+    $isRunning, $processId = Is-Running $PY_PID_FILE
+    if ($isRunning) {
+        Print-Message "Yellow" "Backend Python service is already running (PID: $processId)"
+        return 0
+    }
+    
+    return Execute-Script -ScriptPath $PY_SCRIPT -Command "start" -ServiceName "Backend Python"
 }
 
-# 停止后端Python服务
+# Stop backend Python service
 function Stop-Python {
-    Print-Message $BLUE "停止后端Python服务..."
-    & $PY_SCRIPT stop
-    return $LASTEXITCODE
+    return Execute-Script -ScriptPath $PY_SCRIPT -Command "stop" -ServiceName "Backend Python"
 }
 
-# 查看后端Python服务状态
+# Check backend Python service status
 function Status-Python {
-    Print-Message $BLUE "后端Python服务状态:"
-    & $PY_SCRIPT status
-    return $LASTEXITCODE
+    Print-Banner "Backend Python Service Status"
+    return Execute-Script -ScriptPath $PY_SCRIPT -Command "status" -ServiceName "Backend Python"
 }
 
-# 重启后端Python服务
+# Restart backend Python service
 function Restart-Python {
-    Print-Message $BLUE "重启后端Python服务..."
+    Print-Banner "Restart Backend Python Service"
     Stop-Python
     Start-Sleep -Seconds 3
-    Start-Python
-    return $LASTEXITCODE
+    return Start-Python
 }
 
-# 启动所有服务
+# Start all services
 function Start-All {
     Print-Banner "Start All Services"
-    Start-Frontend
-    Start-Node
-    Start-Python
+    $exitCode1 = Start-Frontend
+    Write-Host
+    $exitCode2 = Start-Node
+    Write-Host
+    $exitCode3 = Start-Python
+    
+    return ($exitCode1 -or $exitCode2 -or $exitCode3)
 }
 
-# 停止所有服务
+# Stop all services
 function Stop-All {
     Print-Banner "Stop All Services"
-    Stop-Frontend
-    Stop-Node
-    Stop-Python
+    $exitCode1 = Stop-Frontend
+    Write-Host
+    $exitCode2 = Stop-Node
+    Write-Host
+    $exitCode3 = Stop-Python
+    
+    return ($exitCode1 -or $exitCode2 -or $exitCode3)
 }
 
-# 重启所有服务
+# Restart all services
 function Restart-All {
     Print-Banner "Restart All Services"
-    Restart-Frontend
-    Restart-Node
-    Restart-Python
+    $exitCode1 = Restart-Frontend
+    Write-Host
+    $exitCode2 = Restart-Node
+    Write-Host
+    $exitCode3 = Restart-Python
+    
+    return ($exitCode1 -or $exitCode2 -or $exitCode3)
 }
 
-# 查看所有服务状态
+# Check all services status
 function Status-All {
     Print-Banner "Services Status"
-    Status-Frontend
+    $exitCode1 = Status-Frontend
     Write-Host
-    Status-Node
+    $exitCode2 = Status-Node
     Write-Host
-    Status-Python
+    $exitCode3 = Status-Python
+    
+    return ($exitCode1 -or $exitCode2 -or $exitCode3)
 }
 
-# 显示帮助信息
+# Show help information
 function Show-Help {
     Print-Banner "Service Management Script"
     Write-Host ""
-    Write-Host "使用方法: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|start:frontend|stop:frontend|restart:frontend|status:frontend|start:node|stop:node|restart:node|status:node|start:python|stop:python|restart:python|status:python|help}"
+    Write-Host "Usage: $($MyInvocation.MyCommand.Name) {start|stop|restart|status|start:frontend|stop:frontend|restart:frontend|status:frontend|start:node|stop:node|restart:node|status:node|start:python|stop:python|restart:python|status:python|help}"
     Write-Host ""
-    Write-Host "命令说明:"
-    Write-Host "  start               - 启动所有服务"
-    Write-Host "  stop                - 停止所有服务"
-    Write-Host "  restart             - 重启所有服务"
-    Write-Host "  status              - 查看所有服务状态"
-    Write-Host "  start:frontend      - 启动前端服务"
-    Write-Host "  stop:frontend       - 停止前端服务"
-    Write-Host "  restart:frontend    - 重启前端服务"
-    Write-Host "  status:frontend     - 查看前端服务状态"
-    Write-Host "  start:node          - 启动后端Node服务"
-    Write-Host "  stop:node           - 停止后端Node服务"
-    Write-Host "  restart:node        - 重启后端Node服务"
-    Write-Host "  status:node         - 查看后端Node服务状态"
-    Write-Host "  start:python        - 启动后端Python服务"
-    Write-Host "  stop:python         - 停止后端Python服务"
-    Write-Host "  restart:python      - 重启后端Python服务"
-    Write-Host "  status:python       - 查看后端Python服务状态"
-    Write-Host "  help                - 显示帮助信息"
+    Write-Host "Commands:"
+    Write-Host "  start               - Start all services"
+    Write-Host "  stop                - Stop all services"
+    Write-Host "  restart             - Restart all services"
+    Write-Host "  status              - Check all services status"
+    Write-Host "  start:frontend      - Start frontend service"
+    Write-Host "  stop:frontend       - Stop frontend service"
+    Write-Host "  restart:frontend    - Restart frontend service"
+    Write-Host "  status:frontend     - Check frontend service status"
+    Write-Host "  start:node          - Start backend Node service"
+    Write-Host "  stop:node           - Stop backend Node service"
+    Write-Host "  restart:node        - Restart backend Node service"
+    Write-Host "  status:node         - Check backend Node service status"
+    Write-Host "  start:python        - Start backend Python service"
+    Write-Host "  stop:python         - Stop backend Python service"
+    Write-Host "  restart:python      - Restart backend Python service"
+    Write-Host "  status:python       - Check backend Python service status"
+    Write-Host "  help                - Show help information"
     Write-Host ""
 }
 
-# 主函数
-switch ($cmd) {
-    "start" {
-        Start-All
+# Main function
+try {
+    switch ($cmd) {
+        "start" {
+            Start-All
+        }
+        "stop" {
+            Stop-All
+        }
+        "restart" {
+            Restart-All
+        }
+        "status" {
+            Status-All
+        }
+        "start:frontend" {
+            Print-Banner "Start Frontend"
+            Start-Frontend
+        }
+        "stop:frontend" {
+            Print-Banner "Stop Frontend"
+            Stop-Frontend
+        }
+        "restart:frontend" {
+            Print-Banner "Restart Frontend"
+            Restart-Frontend
+        }
+        "status:frontend" {
+            Status-Frontend
+        }
+        "start:node" {
+            Print-Banner "Start Node Backend"
+            Start-Node
+        }
+        "stop:node" {
+            Print-Banner "Stop Node Backend"
+            Stop-Node
+        }
+        "restart:node" {
+            Print-Banner "Restart Node Backend"
+            Restart-Node
+        }
+        "status:node" {
+            Status-Node
+        }
+        "start:python" {
+            Print-Banner "Start Python Backend"
+            Start-Python
+        }
+        "stop:python" {
+            Print-Banner "Stop Python Backend"
+            Stop-Python
+        }
+        "restart:python" {
+            Print-Banner "Restart Python Backend"
+            Restart-Python
+        }
+        "status:python" {
+            Status-Python
+        }
+        "help" {
+            Show-Help
+        }
+        default {
+            Print-Message "Red" "Error: Unknown command '$cmd'"
+            Write-Host ""
+            Show-Help
+        }
     }
-    "stop" {
-        Stop-All
-    }
-    "restart" {
-        Restart-All
-    }
-    "status" {
-        Status-All
-    }
-    "start:frontend" {
-        Print-Banner "Start Frontend"
-        Start-Frontend
-    }
-    "stop:frontend" {
-        Print-Banner "Stop Frontend"
-        Stop-Frontend
-    }
-    "restart:frontend" {
-        Print-Banner "Restart Frontend"
-        Restart-Frontend
-    }
-    "status:frontend" {
-        Print-Banner "Frontend Status"
-        Status-Frontend
-    }
-    "start:node" {
-        Print-Banner "Start Node Backend"
-        Start-Node
-    }
-    "stop:node" {
-        Print-Banner "Stop Node Backend"
-        Stop-Node
-    }
-    "restart:node" {
-        Print-Banner "Restart Node Backend"
-        Restart-Node
-    }
-    "status:node" {
-        Print-Banner "Node Backend Status"
-        Status-Node
-    }
-    "start:python" {
-        Print-Banner "Start Python Backend"
-        Start-Python
-    }
-    "stop:python" {
-        Print-Banner "Stop Python Backend"
-        Stop-Python
-    }
-    "restart:python" {
-        Print-Banner "Restart Python Backend"
-        Restart-Python
-    }
-    "status:python" {
-        Print-Banner "Python Backend Status"
-        Status-Python
-    }
-    "help" {
-        Show-Help
-    }
-    default {
-        Print-Message $RED "错误: 未知命令 '$cmd'"
-        Write-Host ""
-        Show-Help
-    }
+} catch {
+    Print-Message "Red" "Unexpected error occurred: $_.Exception.Message"
+    exit 1
 }
