@@ -76,15 +76,29 @@ function main() {
   const outName = `scaffold-windows-${version}.zip`
   ensureDir(outDir)
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'scaffold-stage-'))
+  
+  // Copy main directories
   copyDir(path.join(root, 'frontend'), path.join(stage, 'frontend'), ['node_modules', 'dist', '.cache', '.git'], ['.sh'])
   copyDir(path.join(root, 'backend-node'), path.join(stage, 'backend-node'), ['node_modules', 'dist', '.cache', '.git'], ['.sh'])
+  copyDir(path.join(root, 'backend-python'), path.join(stage, 'backend-python'), ['__pycache__', '.pytest_cache', 'dist', '.git'], [])
+  copyDir(path.join(root, 'docs-framework'), path.join(stage, 'docs-framework'), ['.git'], [])
+  copyDir(path.join(root, '.trae', 'rules'), path.join(stage, '.trae', 'rules'), ['.git'], [])
+  copyDir(path.join(root, 'documents'), path.join(stage, 'documents'), ['.git'], [])
+  copyDir(path.join(root, 'integration'), path.join(stage, 'integration'), ['.git'], [])
+  
+  // Copy individual files
+  copyFile(path.join(root, 'LICENSE'), path.join(stage, 'LICENSE'))
+  copyFile(path.join(root, 'NOTICE'), path.join(stage, 'NOTICE'))
+  copyFile(path.join(root, 'README.md'), path.join(stage, 'README.md'))
+  copyFile(path.join(root, 'VERSION'), path.join(stage, 'VERSION'))
+  
+  // Copy PowerShell scripts
   ensureDir(path.join(stage, 'scripts'))
   copyFile(path.join(root, 'scripts', 'install.ps1'), path.join(stage, 'scripts', 'install.ps1'))
   copyFile(path.join(root, 'scripts', 'sdd.ps1'), path.join(stage, 'scripts', 'sdd.ps1'))
   copyFile(path.join(root, 'scripts', 'service.ps1'), path.join(stage, 'scripts', 'service.ps1'))
   copyFile(path.join(root, 'scripts', 'package-release-win.ps1'), path.join(stage, 'scripts', 'package-release-win.ps1'))
-  copyFile(path.join(root, 'README.md'), path.join(stage, 'README.md'))
-  copyFile(path.join(root, 'VERSION'), path.join(stage, 'VERSION'))
+  
   writeEnvExample(path.join(stage, '.env.example'))
   const outZip = path.join(outDir, outName)
   if (fs.existsSync(outZip)) fs.unlinkSync(outZip)
