@@ -14,7 +14,8 @@
 
 ## 2. SDD (Spec-Driven Development) 强制约束
 - **核心原则**: **No Spec, No Code.** 禁止无对应 `/docs-framework/changes/<feature>/spec.md` 编写功能代码。
-- **解读**: 凡可能导致功能变化的任务都视为变更，必须遵守SDD约束；不确定的情形一律按变更处理。
+- **解读**: 凡可能导致功能变化的任务（含bugfix）都视为变更，必须遵守SDD约束；不确定的情形一律按变更处理。
+- 除非用户明确要求不采用sdd流程。
 - **执行流程**：
   1. 运行 `/scripts/sdd new <feature>` 创建变更提案
   2. 填写 `spec.md` 并通过 `/scripts/sdd check <feature> plan` 验证
