@@ -15,11 +15,11 @@
 ## 2. SDD (Spec-Driven Development) 强制约束
 - **核心原则**: **No Spec, No Code.** 禁止无对应 `/docs-framework/changes/<feature>/spec.md` 编写功能代码。
 - **解读**: 凡可能导致功能变化的任务（含bugfix）都视为变更，必须遵守SDD约束；不确定的情形一律按变更处理。
-- 除非用户明确要求不采用sdd流程。
+- 除非是一般性的编译打包发布，或是用户明确要求不采用sdd流程。
 - **执行流程**：
   1. 运行 `/scripts/sdd new <feature>` 创建变更提案
   2. 填写 `spec.md` 并通过 `/scripts/sdd check <feature> plan` 验证
   3. 生成 `plan.md` 并通过 `/scripts/sdd check <feature> implement` 验证
   4. 开始编码（Git pre-commit 钩子强制检查）
   5. 完成后运行 `/scripts/sdd archive <feature>` 归档
-- **违规处理**：任何违反SDD原则或流程的操作（如跳过Spec直接编码、Spec内容为空等）必须立即阻塞执行，返回标准流程提示直至合规。
+- **违规处理**：任何违反SDD原则或流程的操作（如忽略Spec直接开发、空Spec/Plan等）必须立即阻塞执行，提示SDD流程。
