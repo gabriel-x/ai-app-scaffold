@@ -67,9 +67,9 @@ export default function HomeTemplate() {
   }
 
   return (
-    <div className="min-h-screen theme-bg theme-text font-sans transition-colors duration-300">
+    <div className="min-h-screen theme-text font-sans transition-colors duration-300">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md border-b theme-border bg-opacity-70 theme-surface px-6 py-4 flex items-center justify-between gap-4 transition-all duration-300">
+      <header className="sticky top-0 z-50 backdrop-blur-md border-b theme-border theme-surface px-6 py-4 flex items-center justify-between gap-4 transition-all duration-300">
         <div className="flex items-center gap-2 group cursor-pointer" onClick={() => navigate('/')}>
           <div className="w-8 h-8 rounded bg-gradient-to-tr from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-lg group-hover:shadow-green-500/50 transition-all duration-300">A</div>
           <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-theme-text to-theme-accent">AI Scaffold</span>
@@ -121,15 +121,15 @@ export default function HomeTemplate() {
         </div>
       </header>
 
-      <main className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <main className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative z-10">
         {/* Dashboard Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Chart Section */}
           <div className="lg:col-span-2 card p-6 min-h-[320px] flex flex-col relative overflow-hidden group hover:border-[var(--accent)]/30 transition-all duration-500">
             <div className="flex justify-between items-center mb-6 z-10">
               <div>
                 <h2 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text)] to-[var(--text)]/70">Dashboard</h2>
-                <div className="text-xs opacity-70">Overview of system performance</div>
+                <p className="text-xs opacity-70">Overview of system performance</p>
               </div>
               <div className="flex gap-2">
                 <span className="text-xs px-2 py-1 rounded theme-surface border theme-border opacity-80 hover:opacity-100 cursor-pointer transition-opacity">Interactive</span>
@@ -179,7 +179,7 @@ export default function HomeTemplate() {
         </div>
 
         {/* Content Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* To-Do List */}
           <div className="card p-6 flex flex-col hover:border-[var(--accent)]/30 transition-all duration-500">
             <div className="flex justify-between items-center mb-4">

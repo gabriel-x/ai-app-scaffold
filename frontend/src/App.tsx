@@ -9,26 +9,32 @@ import Register from '@/pages/Register'
 import Profile from '@/pages/Profile'
 import AccountSettings from '@/pages/AccountSettings'
 import HomeTemplate from '@/pages/HomeTemplate'
+import StarryBackground from '@/components/StarryBackground'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeTemplate />} />
-      <Route element={<AuthLayout />}> 
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-      </Route>
-      <Route element={<AppLayout />}> 
-        <Route
-          path="/profile"
-          element={<ProtectedRoute><Profile /></ProtectedRoute>}
-        />
-        <Route
-          path="/account"
-          element={<ProtectedRoute><AccountSettings /></ProtectedRoute>}
-        />
-      </Route>
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+    <div className="relative min-h-screen overflow-hidden">
+      <StarryBackground />
+      <div className="relative z-10">
+        <Routes>
+          <Route path="/" element={<HomeTemplate />} />
+          <Route element={<AuthLayout />}> 
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+          </Route>
+          <Route element={<AppLayout />}> 
+            <Route
+              path="/profile"
+              element={<ProtectedRoute><Profile /></ProtectedRoute>}
+            />
+            <Route
+              path="/account"
+              element={<ProtectedRoute><AccountSettings /></ProtectedRoute>}
+            />
+          </Route>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </div>
+    </div>
   )
 }

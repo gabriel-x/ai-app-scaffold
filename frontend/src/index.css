@@ -6,6 +6,7 @@
 @import "tailwindcss/utilities";
 
 html, body, #root { height: 100%; }
+body { background-color: var(--bg); color: var(--text); transition: background-color 0.3s, color 0.3s; }
 
 :root[data-theme="blue"] { --bg: theme(colors.blue.bgLight); --surface: theme(colors.blue.surfaceLight); --border: theme(colors.blue.borderLight); --text: theme(colors.blue.textLight); --accent: theme(colors.blue.accentLight); --hero-bg: theme(colors.blue.heroLight); --bubble-bg: theme(colors.blue.bubbleBgLight); --bubble-border: theme(colors.blue.bubbleBorderLight); --bubble-text: theme(colors.blue.bubbleTextLight); }
 :root.dark[data-theme="blue"] { --bg: theme(colors.blue.bgDark); --surface: theme(colors.blue.surfaceDark); --border: theme(colors.blue.borderDark); --text: theme(colors.blue.textDark); --accent: theme(colors.blue.accentDark); --hero-bg: theme(colors.blue.heroDark); --bubble-bg: theme(colors.blue.bubbleBgDark); --bubble-border: theme(colors.blue.bubbleBorderDark); --bubble-text: theme(colors.blue.bubbleTextDark); }
@@ -29,15 +30,16 @@ html, body, #root { height: 100%; }
 /* Ensure transparent bg for holographic to show body background ONLY in Dark Mode */
 :root.dark[data-theme="holographic"] { --bg: transparent; }
 
-.theme-bg { background-color: var(--bg); transition: background-color 0.3s, color 0.3s; }
-.theme-surface { background-color: var(--surface); transition: background-color 0.3s, border-color 0.3s; }
+.theme-bg { background-color: transparent; transition: background-color 0.3s, color 0.3s; }
+
+.theme-surface { background-color: color-mix(in srgb, var(--surface) 30%, transparent); transition: background-color 0.3s, border-color 0.3s; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .theme-border { border-color: var(--border); transition: border-color 0.3s; }
 .theme-text { color: var(--text); transition: color 0.3s; }
 .theme-accent { color: var(--accent); transition: color 0.3s; }
 .theme-btn { background-color: var(--accent); color: #fff; transition: background-color 0.3s; }
 .theme-focus-ring:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 50%, transparent); }
 
-.card { background-color: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 12px 28px rgba(0,0,0,0.35); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: background-color 0.3s, border-color 0.3s; }
+.card { background-color: color-mix(in srgb, var(--surface) 25%, transparent); border: 1px solid color-mix(in srgb, var(--border) 50%, transparent); border-radius: 0.75rem; box-shadow: 0 12px 28px rgba(0,0,0,0.35); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); transition: background-color 0.3s, border-color 0.3s; }
 .hero { background: radial-gradient(110% 120% at 50% 10%, color-mix(in oklab, var(--accent) 30%, transparent) 0%, transparent 60%), var(--hero-bg); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
 .btn-accent { background-image: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 60%, #1f2937)); color: #fff; }
 .bubble { background-color: var(--bubble-bg); border: 1px solid var(--bubble-border); color: var(--bubble-text); border-radius: 9999px; padding: 0.125rem 0.5rem; font-size: 12px; }

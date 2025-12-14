@@ -12,7 +12,7 @@ export default function Navigation() {
     : 'opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all'
 
   return (
-    <nav className="flex items-center justify-between p-4 border-b theme-border backdrop-blur-sm bg-[var(--surface)]/50 sticky top-0 z-10">
+    <nav className="flex items-center justify-between p-4 border-b theme-border theme-surface sticky top-0 z-10">
       <div className="flex gap-6">
         <Link to="/profile" className={isActive('/profile')}>个人主页</Link>
         <Link to="/account" className={isActive('/account')}>账号设置</Link>
