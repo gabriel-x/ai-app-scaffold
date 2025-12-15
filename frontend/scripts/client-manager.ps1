@@ -93,16 +93,62 @@ function Is-Service-Accessible {
         [int]$Port
     )
     try {
-        # 使用netstat检查端口是否正在监听
         $netstatOutput = netstat -ano | findstr :$Port | findstr LISTENING 2>&1
         if ($netstatOutput) {
             return $true
-        } else {
-            return $false
         }
     } catch {
-        return $false
     }
+    return $false
+}
+
+# 通过端口查找监听进程 PID 列表
+function Get-Pids-ByPort {
+    param(
+        [int]$Port
+    )
+    $pids = @()
+    try {
+        $netstatOutput = netstat -ano | findstr :$Port 2>&1
+        if ($netstatOutput) {
+            $netstatOutput | ForEach-Object {
+                if ($_ -match "LISTENING\s+(\d+)") {
+                    $pids += [int]$matches[1]
+                }
+            }
+        }
+    } catch {
+    }
+    return $pids
+}
+
+# 过滤出本项目相关的进程 PID（根据命令行中的前端目录 / vite / node 关键字）
+function Get-AppPids-OnPort {
+    param(
+        [int]$Port
+    )
+    $result = @()
+    $pids = Get-Pids-ByPort -Port $Port
+    if (-not $pids -or $pids.Count -eq 0) {
+        return $result
+    }
+    foreach ($procId in $pids) {
+        try {
+            $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$procId"
+            if ($null -ne $proc) {
+                $cmdLine = $proc.CommandLine
+                if ($cmdLine -and (
+                    $cmdLine -like "*$FRONTEND_DIR*" -or
+                    $cmdLine -match "vite.*$Port" -or
+                    $cmdLine -match "node.*$Port"
+                )) {
+                    $result += [int]$procId
+                }
+            }
+        } catch {
+        }
+    }
+    return $result
 }
 
 # 启动前端服务
@@ -111,12 +157,14 @@ function Start-Frontend {
     Load-Env (Join-Path $PROJECT_ROOT ".env")
     Load-Env (Join-Path $FRONTEND_DIR ".env")
     
-    # 设置默认端口和端口范围
-    # 缺省前端端口号是10100，允许的动态范围是10100-10199
+    # 设置默认端口和端口范围（与 Bash 脚本保持一致）
     $FRONTEND_DEFAULT_PORT = 10100
-    $FRONTEND_PORT_RANGE = "10100-10199"
+    $FRONTEND_PORT_RANGE = $Env:FRONTEND_PORT_RANGE
+    if (-not $FRONTEND_PORT_RANGE) {
+        $FRONTEND_PORT_RANGE = "10100-10199"
+    }
     
-    # 从.env文件读取端口配置
+    # 从环境变量读取端口配置
     $FRONTEND_PORT = $Env:FRONTEND_PORT -as [int]
     if (-not $FRONTEND_PORT) {
         $FRONTEND_PORT = $FRONTEND_DEFAULT_PORT
@@ -171,9 +219,9 @@ function Start-Frontend {
         }
         
         # 没有可用端口
-    return $null
-}
-
+        return $null
+    }
+    
     # 确保端口可用
     $availablePort = Find-Available-Port $FRONTEND_PORT_START $FRONTEND_PORT_END $FRONTEND_PORT
     if ($availablePort -eq $null) {
@@ -181,12 +229,37 @@ function Start-Frontend {
         return 1
     }
     $FRONTEND_PORT = $availablePort
+    $Env:FRONTEND_PORT = $FRONTEND_PORT
+    $Env:PORT = $FRONTEND_PORT
     
     # 检查服务是否已运行
     $isRunning, $runningProcessId = Is-Running
     if ($isRunning) {
         Print-Message "Yellow" "Frontend service is already running (PID: $runningProcessId)"
         return 0
+    }
+    
+    # 检查依赖是否已安装（不存在 node_modules 时自动安装）
+    $nodeModulesPath = Join-Path $FRONTEND_DIR "node_modules"
+    if (-not (Test-Path $nodeModulesPath)) {
+        Print-Message "Yellow" "Installing frontend dependencies in $FRONTEND_DIR..."
+        try {
+            if (Get-Command pnpm -ErrorAction SilentlyContinue) {
+                Push-Location $FRONTEND_DIR
+                pnpm install
+                Pop-Location
+            } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
+                Push-Location $FRONTEND_DIR
+                npm install
+                Pop-Location
+            } else {
+                Print-Message "Red" "[ERROR] Neither pnpm nor npm found in PATH (for install)"
+                return 1
+            }
+        } catch {
+            Print-Message "Red" "[ERROR] Failed to install frontend dependencies: $($_.Exception.Message)"
+            return 1
+        }
     }
     
     Ensure-LogDir
@@ -296,7 +369,36 @@ function Start-Frontend {
 function Stop-Frontend {
     $isRunning, $processId = Is-Running
     if (-not $isRunning) {
+        # 即使未检测到运行中的 PID，也检查端口上是否有本项目残留进程
+        Load-Env (Join-Path $PROJECT_ROOT ".env")
+        Load-Env (Join-Path $FRONTEND_DIR ".env")
+        $FRONTEND_PORT = $Env:FRONTEND_PORT -as [int]
+        if (-not $FRONTEND_PORT) {
+            $FRONTEND_PORT = 10100
+        }
+        $appPids = Get-AppPids-OnPort -Port $FRONTEND_PORT
+        if ($appPids.Count -gt 0) {
+            Print-Message "Yellow" "Detected processes on port $FRONTEND_PORT that appear to belong to this project. Attempting to clean up..."
+            foreach ($procId in $appPids) {
+                try {
+                    $p = Get-Process -Id $procId -ErrorAction Stop
+                    $p.Kill()
+                    $p.WaitForExit()
+                } catch {
+                }
+            }
+            Start-Sleep -Seconds 2
+            if (Is-Service-Accessible $FRONTEND_PORT) {
+                Print-Message "Red" "[WARN] Port $FRONTEND_PORT is still in use after cleanup"
+                return 1
+            } else {
+                Print-Message "Green" "[OK] Cleaned up leftover frontend processes. Service is not running."
+                Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
+                return 0
+            }
+        }
         Print-Message "Yellow" "Frontend service is not running"
+        Remove-Item $PID_FILE -Force -ErrorAction SilentlyContinue
         return 0
     }
     
@@ -343,6 +445,12 @@ function Status-Frontend {
         }
         return 0
     } else {
+        # 若无 PID 但端口有监听，提示服务可能由外部启动
+        if (Is-Service-Accessible $FRONTEND_PORT) {
+            Print-Message "Yellow" "[WARN] No PID file, but a service is listening on port $FRONTEND_PORT"
+            Print-Message "Blue" "Access address: http://localhost:$FRONTEND_PORT"
+            return 0
+        }
         Print-Message "Red" "[ERROR] Frontend service is not running"
         return 1
     }

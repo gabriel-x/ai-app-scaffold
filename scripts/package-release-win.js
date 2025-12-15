@@ -18,7 +18,7 @@ function copyFile(src, dst) {
   fs.copyFileSync(src, dst)
 }
 
-function copyDir(src, dst, excludeDirs, excludeExts) {
+function copyDir(src, dst, excludeDirs, excludeExts, excludeFiles) {
   ensureDir(dst)
   const entries = fs.readdirSync(src, { withFileTypes: true })
   for (const e of entries) {
@@ -26,10 +26,13 @@ function copyDir(src, dst, excludeDirs, excludeExts) {
     const dp = path.join(dst, e.name)
     if (e.isDirectory()) {
       if (excludeDirs.includes(e.name)) continue
-      copyDir(sp, dp, excludeDirs, excludeExts)
+      copyDir(sp, dp, excludeDirs, excludeExts, excludeFiles)
     } else {
       const ext = path.extname(e.name)
       if (excludeExts.includes(ext)) continue
+      if (excludeFiles.includes(e.name)) continue
+      // 排除匹配特定模式的文件，如*.port、*.pid等
+      if (e.name.endsWith('.port') || e.name.endsWith('.pid')) continue
       copyFile(sp, dp)
     }
   }
@@ -77,14 +80,18 @@ function main() {
   ensureDir(outDir)
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'scaffold-stage-'))
   
-  // Copy main directories
-  copyDir(path.join(root, 'frontend'), path.join(stage, 'frontend'), ['node_modules', 'dist', '.cache', '.git'], ['.sh'])
-  copyDir(path.join(root, 'backend-node'), path.join(stage, 'backend-node'), ['node_modules', 'dist', '.cache', '.git'], ['.sh'])
-  copyDir(path.join(root, 'backend-python'), path.join(stage, 'backend-python'), ['__pycache__', '.pytest_cache', 'dist', '.git'], [])
-  copyDir(path.join(root, 'docs-framework'), path.join(stage, 'docs-framework'), ['.git'], [])
-  copyDir(path.join(root, '.trae', 'rules'), path.join(stage, '.trae', 'rules'), ['.git'], [])
-  copyDir(path.join(root, 'documents'), path.join(stage, 'documents'), ['.git'], [])
-  copyDir(path.join(root, 'integration'), path.join(stage, 'integration'), ['.git'], [])
+  // Copy main directories with enhanced exclusions
+  const commonExcludeDirs = ['.git', '.vscode', '.idea', 'node_modules', 'dist', '.cache', 'logs', '.trae/documents', '__pycache__', '.pytest_cache', '.vite', 'playwright-report', 'test-results', 'venv', '.venv', '.mypy_cache', '.tox', '.ropeproject']
+  const commonExcludeFiles = ['.DS_Store', 'Thumbs.db', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*', 'pnpm-debug.log*', '*.pyc', '*.pyo', '.python-version', 'debug*.log']
+  const backendExcludeDirs = commonExcludeDirs.filter(d => d !== 'dist')
+  
+  copyDir(path.join(root, 'frontend'), path.join(stage, 'frontend'), commonExcludeDirs, ['.sh'], commonExcludeFiles)
+  copyDir(path.join(root, 'backend-node'), path.join(stage, 'backend-node'), backendExcludeDirs, ['.sh'], commonExcludeFiles)
+  copyDir(path.join(root, 'backend-python'), path.join(stage, 'backend-python'), commonExcludeDirs, [], commonExcludeFiles)
+  copyDir(path.join(root, 'docs-framework'), path.join(stage, 'docs-framework'), commonExcludeDirs, [], commonExcludeFiles)
+  copyDir(path.join(root, '.trae', 'rules'), path.join(stage, '.trae', 'rules'), commonExcludeDirs, [], commonExcludeFiles)
+  copyDir(path.join(root, 'documents'), path.join(stage, 'documents'), commonExcludeDirs, [], commonExcludeFiles)
+  copyDir(path.join(root, 'integration'), path.join(stage, 'integration'), commonExcludeDirs, [], commonExcludeFiles)
   
   // Copy individual files
   copyFile(path.join(root, 'LICENSE'), path.join(stage, 'LICENSE'))

@@ -83,7 +83,7 @@ function Execute-Script {
     # Reset console before executing child script
     [Console]::ResetColor()
     
-    # Execute the script directly without output capturing which causes display issues
+    # 直接在当前 PowerShell 会话中执行子脚本，让其自行负责长生命周期进程的后台化
     & $ScriptPath $Command
     $exitCode = $LASTEXITCODE
     
